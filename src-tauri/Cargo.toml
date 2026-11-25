@@ -41,6 +41,10 @@ percent-encoding = "2"
 # 우클릭 메뉴의 「붙여 넣기」 — 웹뷰의 navigator.clipboard.readText 는 권한을 묻다 멈춘다
 arboard = { version = "3", default-features = false }
 
+[target.'cfg(windows)'.dependencies]
+# claude 를 앱이 쥔 job 에 넣어, 앱이 어떻게 꺼지든(닫기 · 업데이트 설치 · 강제 종료) 함께 끈다 (claude.rs). tauri 가 이미 쓰는 판이라 새로 받는 것은 없다
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

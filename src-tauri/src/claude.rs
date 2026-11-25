@@ -29,11 +29,23 @@ pub struct Detected {
 
 /// claude 실행 파일을 찾는다. npm 으로 깐 경우 claude.cmd 옆 node_modules 안의 claude.exe 를 바로 쓴다 —
 /// cmd 를 거치면 빈 인자("")와 따옴표가 깨진다.
+/// 찾은 경로는 기억한다 — 턴마다 where 를 띄우지 않게. 그 자리에서 없어지면(업데이트로 옮겨짐) 다시 찾는다
 pub fn resolve(custom: &str) -> Option<PathBuf> {
 	if !custom.trim().is_empty() {
 		let p = PathBuf::from(custom.trim());
 		return p.exists().then_some(p);
 	}
+	static FOUND: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+	if let Some(p) = FOUND.lock().unwrap().clone().filter(|p| p.is_file()) {
+		return Some(p);
+	}
+	let p = on_path().or_else(|| known_places(|k| std::env::var_os(k).map(PathBuf::from)).into_iter().find(|p| p.is_file()))?;
+	*FOUND.lock().unwrap() = Some(p.clone());
+	Some(p)
+}
+
+/// PATH 에서 — where 가 주는 순서대로 .exe, 없으면 npm 의 claude.cmd 옆 claude.exe
+fn on_path() -> Option<PathBuf> {
 	let mut c = std::process::Command::new("where");
 	crate::hidden(&mut c);
 	let out = c.arg("claude").output().ok()?;
@@ -42,15 +54,87 @@ pub fn resolve(custom: &str) -> Option<PathBuf> {
 	if let Some(exe) = lines.iter().find(|l| l.to_ascii_lowercase().ends_with(".exe")) {
 		return Some(PathBuf::from(exe));
 	}
-	for l in &lines {
-		if l.to_ascii_lowercase().ends_with(".cmd") {
-			let exe = Path::new(l).parent()?.join("node_modules/@anthropic-ai/claude-code/bin/claude.exe");
-			if exe.exists() {
-				return Some(exe);
+	lines.iter().filter(|l| l.to_ascii_lowercase().ends_with(".cmd")).find_map(|l| Some(npm_exe(Path::new(l).parent()?)).filter(|p| p.is_file()))
+}
+
+fn npm_exe(prefix: &Path) -> PathBuf {
+	prefix.join("node_modules/@anthropic-ai/claude-code/bin/claude.exe")
+}
+
+/// PATH 에 없을 때 볼 자리. 앱을 시작 메뉴에서 띄우면 claude 를 막 깐 뒤에도 PATH 가 옛것이라 where 가 못 찾는다
+/// (탐색기가 로그인 때 받은 환경을 물려준다). 깐 방법마다 놓이는 곳:
+///   네이티브 설치(claude.ai/install.ps1)  %USERPROFILE%\.local\bin\claude.exe
+///   npm 전역                              %APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe
+///   WinGet                                %LOCALAPPDATA%\Microsoft\WinGet\Links\claude.exe
+///   Scoop                                 %USERPROFILE%\scoop\shims\claude.exe
+fn known_places(env: impl Fn(&str) -> Option<PathBuf>) -> Vec<PathBuf> {
+	let mut v = vec![];
+	if let Some(h) = env("USERPROFILE") {
+		v.push(h.join(".local").join("bin").join("claude.exe"));
+	}
+	if let Some(a) = env("APPDATA") {
+		v.push(npm_exe(&a.join("npm")));
+	}
+	if let Some(l) = env("LOCALAPPDATA") {
+		v.push(l.join("Microsoft").join("WinGet").join("Links").join("claude.exe"));
+	}
+	if let Some(h) = env("USERPROFILE") {
+		v.push(h.join("scoop").join("shims").join("claude.exe"));
+	}
+	v
+}
+
+/// 앱이 띄운 claude 를 앱의 job 에 넣는다. job 은 「손잡이가 닫히면 안의 프로세스를 모두 끈다」로 만들고 손잡이를 끝까지 쥐므로,
+/// 앱이 어떻게 꺼지든(창 닫기 · 업데이트 설치가 앱을 끝냄 · 강제 종료 · 죽음) OS 가 claude 와 그 자식까지 끈다.
+/// 전에는 앱을 닫아도 돌던 claude 가 남아 덱 파일을 계속 고치고 구독 사용량을 썼다
+#[cfg(windows)]
+mod job {
+	use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+	use windows_sys::Win32::System::JobObjects::{
+		AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+		SetInformationJobObject,
+	};
+
+	pub struct Job(HANDLE);
+	// 손잡이는 커널 개체 번호라 스레드를 건너가도 된다
+	unsafe impl Send for Job {}
+	unsafe impl Sync for Job {}
+
+	impl Job {
+		pub fn new() -> Option<Job> {
+			unsafe {
+				let h = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+				if h.is_null() {
+					return None;
+				}
+				let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+				info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+				let ok = SetInformationJobObject(h, JobObjectExtendedLimitInformation, &info as *const _ as *const _, size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32);
+				if ok == 0 {
+					CloseHandle(h);
+					return None;
+				}
+				Some(Job(h))
 			}
 		}
+
+		/// 실패해도(이미 다른 job 이 끊기 못하게 묶은 경우 등) 턴은 그대로 돈다 — 앱을 닫을 때만 남을 뿐이다
+		pub fn adopt(&self, process: HANDLE) -> bool {
+			unsafe { AssignProcessToJobObject(self.0, process) != 0 }
+		}
 	}
-	None
+
+	impl Drop for Job {
+		fn drop(&mut self) {
+			unsafe { CloseHandle(self.0) };
+		}
+	}
+
+	/// 앱이 끝까지 쥐는 job — 앱 프로세스가 끝날 때 OS 가 닫는다
+	pub fn app() -> Option<&'static Job> {
+		static JOB: std::sync::OnceLock<Option<Job>> = std::sync::OnceLock::new();
+		JOB.get_or_init(Job::new).as_ref()
+	}
 }
 
 #[tauri::command]
@@ -204,6 +288,10 @@ pub async fn claude_run(app: AppHandle, state: State<'_, AppState>, spec: RunSpe
 	#[cfg(windows)]
 	cmd.creation_flags(0x0800_0000);
 	let mut child = cmd.spawn().map_err(|e| format!("claude 를 띄우지 못했다: {e}"))?;
+	#[cfg(windows)]
+	if let (Some(j), Some(h)) = (job::app(), child.raw_handle()) {
+		j.adopt(h as _);
+	}
 	if let Some(pid) = child.id() {
 		state.runs.lock().unwrap().insert(spec.turn.clone(), pid);
 	}
@@ -315,5 +403,47 @@ mod tests {
 		backup_transcript(&root, &deck, "../../evil");
 		assert!(!t.join("evil.jsonl").exists());
 		let _ = std::fs::remove_dir_all(&t);
+	}
+
+	#[test]
+	fn known_places_cover_each_installer_in_order() {
+		let env = |k: &str| match k {
+			"USERPROFILE" => Some(PathBuf::from(r"C:\Users\me")),
+			"APPDATA" => Some(PathBuf::from(r"C:\Users\me\AppData\Roaming")),
+			"LOCALAPPDATA" => Some(PathBuf::from(r"C:\Users\me\AppData\Local")),
+			_ => None,
+		};
+		let v: Vec<String> = known_places(env).iter().map(|p| p.to_string_lossy().replace('/', "\\")).collect();
+		assert_eq!(v, [
+			r"C:\Users\me\.local\bin\claude.exe",
+			r"C:\Users\me\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe",
+			r"C:\Users\me\AppData\Local\Microsoft\WinGet\Links\claude.exe",
+			r"C:\Users\me\scoop\shims\claude.exe",
+		]);
+		// 환경 변수가 없으면 그 자리는 건너뛴다
+		assert!(known_places(|_| None).is_empty());
+	}
+
+	/// job 손잡이가 닫히면(= 앱이 꺼지면) 넣어 둔 프로세스와 그 자식까지 꺼진다
+	#[cfg(windows)]
+	#[test]
+	fn closing_the_job_kills_claude_and_its_children() {
+		use std::os::windows::io::AsRawHandle;
+		use std::time::{Duration, Instant};
+		// cmd 가 ping 을 자식으로 띄운다 — claude.exe 가 제 자식을 띄우는 것과 같은 모양
+		let mut c = std::process::Command::new("cmd");
+		c.args(["/c", "ping -n 60 127.0.0.1 > nul"]);
+		crate::hidden(&mut c);
+		let mut child = c.spawn().unwrap();
+		let j = job::Job::new().expect("job");
+		assert!(j.adopt(child.as_raw_handle() as _));
+		std::thread::sleep(Duration::from_millis(500));
+		assert!(child.try_wait().unwrap().is_none(), "아직 돌아야 한다");
+		drop(j);
+		let t0 = Instant::now();
+		while child.try_wait().unwrap().is_none() {
+			assert!(t0.elapsed() < Duration::from_secs(5), "job 을 닫았는데 꺼지지 않았다");
+			std::thread::sleep(Duration::from_millis(50));
+		}
 	}
 }
