@@ -1,5 +1,5 @@
 // 사용자 제목 줄 — 끌어서 창 옮기기 · 두 번 눌러 최대화. 왼쪽에 처음 · 덱 이름 · 판 번호(누르면 판 목록), 가운데에 한 쪽 · 이어 보기,
-// 오른쪽에 담당 점(Seats.tsx) · 내보내기 · 릴리즈 · 설정 · 창 단추.
+// 오른쪽에 내보내기 · 릴리즈 · 설정 · 창 단추.
 // 2026.11.18 : 가운데의 보기 · 핀 · 편집 모드를 걷었다 — 무대 도구 띠(고르기 · 펜 · 화살표 · 범위) 하나로 합쳤다.
 //              무대 아래 판 줄기(눈금 띠)도 걷고 판 번호를 누르면 여는 판 목록으로 옮겼다 — 눈금이 거의 안 보이면서 자리만 먹었다.
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,7 +10,6 @@ import { useDeck } from "../lib/store";
 import { useUpdate } from "../lib/updater";
 import { openMenu } from "./ContextMenu";
 import DeckActions from "./DeckActions";
-import { SeatDots, seatColor } from "./Seats";
 
 export const Mark = () => (
 	<svg className="mark" viewBox="0 0 16 16" aria-hidden>
@@ -88,7 +87,6 @@ export default function TitleBar({ onSettings, settingsOpen }: { onSettings: () 
 			</div>
 			<div className="right" data-tauri-drag-region>
 				<UpdateChip />
-				{deck && <SeatDots />}
 				{deck && <DeckActions />}
 				<button className={"tb-btn" + (settingsOpen ? " on" : "")} onClick={onSettings} title={t("settings") + " (Ctrl+,)"} aria-label={t("settings")}>
 					<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><circle cx="10.5" cy="4.5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" /><circle cx="5.5" cy="11.5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
@@ -133,7 +131,6 @@ function VersionList({ onClose }: { onClose: () => void }) {
 	const setPreview = useDeck((s) => s.setPreview);
 	const restore = useDeck((s) => s.restore);
 	const running = useDeck((s) => s.running);
-	const seats = useDeck((s) => s.seats);
 	const ref = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		const k = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.(".stamp")) onClose(); };
@@ -160,8 +157,7 @@ function VersionList({ onClose }: { onClose: () => void }) {
 						])}>
 						{/* 대화의 판 알약과 같은 모양 — 지금 판만 채운다 */}
 						<span className={"node" + (c === head ? " head" : "")}>v{c.n}</span>
-						{/* 담당이 남긴 판은 그 담당 번호를 담당 색으로 — 누가 고쳤는지 */}
-						<span className="s">{c.seat != null && <i className="sd" style={{ "--c": seatColor(seats, c.seat) } as React.CSSProperties} title={c.author}>{c.seat}</i>}<span>{c.subject}</span>{rel && <i className="rtag">{rel}</i>}</span>
+						<span className="s"><span>{c.subject}</span>{rel && <i className="rtag">{rel}</i>}</span>
 						<span className="d">{c.date.slice(5, 16)}</span>
 					</button>
 				);

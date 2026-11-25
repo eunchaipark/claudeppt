@@ -73,20 +73,6 @@ claudeppt.exe help           # 명령 목록
   - 스킬 상태(설치 안 됨 · 최신 · 앱과 버전이 다름)와 「설치 · 다시 설치」 · 폴더 열기. 앱을 새 버전으로 올리거나 실행 파일이 옮겨지면 「앱과 버전이 다름」이 된다.
   - CLI 경로 복사 · 최근 바깥 명령 30개(시각 · 명령 · 덱 · 걸린 시간 · 실패 까닭). `commit` · `restore` 처럼 앱 없이 한 일도 앱이 켜져 있으면 남는다.
 
-## 담당 — 여러 세션이 한 덱을 나눠 고치기
-
-바깥 Claude Code 세션 여럿이 한 덱을 함께 고칠 때, 세션 하나가 「담당」 하나를 맡는다 (1번 담당 · 2번 담당 …).
-세션을 Remote Control 로 밖에서 조종해도 세션 자체는 이 PC 에서 돌므로 같은 길로 붙는다.
-
-- **앱에서 정한다** — 제목 줄의 담당 점 → 「담당」 창. 담당 추가 · 이름 고치기 · 맡길 쪽(쪽 번호 누르기) · 권한(테마 = `theme.css` · 쪽 구성 = 쪽 더하기/빼기/옮기기 · 덱 관리 = 되돌리기/릴리즈).
-  「맡기는 말 복사」를 세션에 붙여 넣으면 그 세션이 `cppt join <n>` 으로 맡는다. 「비우기」는 맡은 세션을 내보낸다.
-- **보인다** — 담당마다 맡음 · 일하는 중(마지막 명령 3분 안) · 비어 있음(30분 넘게 조용함)과 지금 하는 일(`cppt doing`). 쪽 목록에 맡은 담당 번호 · 고치는 중인 쪽 테두리, 판 목록에 판을 남긴 담당.
-- **지킨다** — 담당 세션의 `commit` 은 맡은 파일만 판에 넣고(작성자 = 담당), 나머지는 `left` 로 돌려준다. 권한 없는 쪽 구성 · 되돌리기 · 릴리즈는 CLI 가 거절한다.
-  파일 고치기 자체는 막지 못한다 — 범위 밖 변경은 판에서 빠지고 「맡은 담당이 없는 변경」으로 보인다.
-- **세션을 알아보는 법** — Claude Code 가 Bash 에 주는 `CLAUDE_CODE_SESSION_ID`. Claude Code 밖에서 부르면 `--session <이름>` · `--seat <번호>`.
-- **파일** — `.claudeppt/seats.json`(정의 · 앱이 쓴다) · `presence.json`(맡은 세션 · CLI 가 쓴다) · `activity.jsonl`(한 일). 판에 넣지 않는다.
-- 담당을 만들지 않으면 전처럼 제한 없이 돈다. 담당이 없는 덱에서 `join` 하면 모든 권한의 1번이 생긴다.
-
 ## Claude 격리
 
 이 앱의 Claude 는 사용자의 다른 Claude 설정에 영향을 받지 않는다. 인자는 `src-tauri/src/claude.rs` 에 고정돼 있어 화면에서 바꿀 수 없다.
@@ -190,8 +176,7 @@ cd src-tauri && cargo check
 | - | - |
 | `src-tauri/src/lib.rs` | 명령 등록 · `deck://` 프로토콜 (슬라이드에 런타임을 끼워 내준다, `<id>@<커밋>` 이면 그 판의 파일) |
 | `src-tauri/src/claude.rs` | claude 헤드리스 실행 · 격리 인자 · stream-json 을 사건으로 |
-| `src-tauri/src/vcs.rs` | 판(git) — 남기기 · 이력 · 태그 · 되돌리기(앞으로만) · 담당의 판(맡은 파일만 · 작성자) |
-| `src-tauri/src/seats.rs` · `src/lib/seats.ts` · `src/components/Seats.tsx` | 담당 — 정의 · 맡기 · 범위 규칙(CLI) · 담당 창 · 쪽 목록 표시 |
+| `src-tauri/src/vcs.rs` | 판(git) — 남기기 · 이력 · 태그 · 되돌리기(앞으로만) |
 | `src-tauri/src/watch.rs` | 프로젝트 폴더 감시 → `deck-fs` 사건 |
 | `src-tauri/src/cli.rs` · `src-tauri/src/main.rs` | CLI — 인자가 있으면 창 없이 명령으로 · 앱 없이 하는 일 · 앱 부르기(꺼져 있으면 띄운다) · `skill` 깔기 |
 | `src-tauri/src/control.rs` · `src/lib/remote.ts` | 명령 받기 통로 — 토큰 붙은 JSON 한 줄을 받아 화면에 「remote」 사건으로 넘기고 답을 기다린다 · 화면 쪽 처리기 |

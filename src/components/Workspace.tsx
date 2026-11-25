@@ -3,7 +3,6 @@
 // 목차
 //   SlideFrame    슬라이드 iframe 하나. 크기를 맞춰 줄이고, 다시 그릴 표식(rev)이 바뀌면 새로 읽는다
 //   Rail          쪽 목록 — 끌어서 순서 바꾸기 · Delete 로 빼기 · 쪽 사이 + 로 빈 쪽 · 판 비교 중이면 바뀐 쪽 · 새 쪽 표시
-//                 담당 — 맡은 담당 번호를 그 색으로, 담당이 방금 고쳤거나 고치는 중인 쪽은 미리보기 테두리를 그 색으로
 //   Stage         무대 — 도구(고르기 · 펜 · 화살표 · 상자) · 직접 편집 메시지 받기 · 지난 판 미리 보기 · 휠로 쪽 넘기기 · 판 비교 (VersionLens.tsx)
 //   MarkLayer     표시 층 — 그어 놓은 표시를 그리고, 긋는 도구일 때 긋기를 받는다 · StageTools 도구 띠
 //   Flow          이어 보기 — 모든 쪽을 세로로 늘어놓고 스크롤로 넘긴다. 가운데 온 쪽이 지금 쪽이 된다
@@ -14,11 +13,9 @@ import { type Deck } from "../lib/deck";
 import { ask, onFrame } from "../lib/frames";
 import { useT } from "../lib/i18n";
 import { anchor, bbox, MARK, type Shape, shapePath, tiny, type Tool } from "../lib/markup";
-import { busy, TOUCH_MS } from "../lib/seats";
 import { type Pin, useDeck } from "../lib/store";
 import { type MenuItem, openMenu } from "./ContextMenu";
 import { VersionBar, VersionLens } from "./VersionLens";
-import { seatColor, useTick } from "./Seats";
 import { SketchBoard } from "./Sketch";
 import Talk, { useTalkFold } from "./Talk";
 
@@ -264,11 +261,6 @@ function Rail() {
 	const move = useDeck((s) => s.moveSlide);
 	const addSlide = useDeck((s) => s.addSlide);
 	const removeSlide = useDeck((s) => s.removeSlide);
-	const seats = useDeck((s) => s.seats);
-	const presence = useDeck((s) => s.presence);
-	const touched = useDeck((s) => s.touched);
-	// 「방금 고친」 색이 시간이 지나면 풀리게 다시 그린다 — 담당이 있을 때만
-	useTick(10000, seats.length > 0);
 	const [drag, setDrag] = useState<number | null>(null);
 	const [dropAt, setDropAt] = useState<number | null>(null);
 	const lastFiles = useMemo(() => new Set(turns[turns.length - 1]?.tools.map((x) => x.file).filter(Boolean)), [turns]);
@@ -285,11 +277,6 @@ function Rail() {
 				// 비교 차이는 숫자 대신 미리보기 테두리로 — 숫자는 비교 렌즈를 켰을 때만. 0.1% 차이에 모든 쪽이 빨간 글자로 칠해지면 무엇이 급한지 안 보인다
 				// 판 비교 중이면 고른 판과 다른 쪽에 점선 테두리 · 그 뒤에 생긴 쪽에 「새」 — 바뀐 쪽만 골라 넘겨 볼 수 있게
 				const vs = !preview ? vdiff?.slides[sl.id] : undefined;
-				// 맡은 담당(쪽을 골라 맡긴 담당만 — 「모든 쪽」 담당은 모든 쪽에 붙어 뜻이 없다) · 지금 고치는 담당
-				const own = preview ? [] : seats.filter((x) => Array.isArray(x.slides) && x.slides.includes(sl.id));
-				const doer = preview ? undefined : seats.find((x) => busy(presence[x.no]) && presence[x.no].doing?.slides.includes(sl.id))?.no
-					?? (touched[sl.id] && Date.now() - touched[sl.id].at < TOUCH_MS ? touched[sl.id].seat : undefined);
-				const doerName = doer != null ? `${t("seatBy")}: ${t("seatNo").replace("{n}", String(doer))}` : "";
 				return (
 					<div key={sl.id} className={"rail-item" + (i === current ? " on" : "") + (dropAt === i ? " drop-before" : "") + (vs ? " drift" : "")}
 						onDragOver={(e) => { if (drag != null) { e.preventDefault(); setDropAt(i); } }}
@@ -299,13 +286,11 @@ function Rail() {
 						<div className="no">
 							<span>{i + 1}</span>
 							{n > 0 && <span className="pins" title={`${t("pins")} ${n}`} />}
-							{own.map((x) => <i key={x.no} className="sd" style={{ "--c": x.color } as React.CSSProperties} title={`${t("seatOwner")}: ${t("seatNo").replace("{n}", String(x.no))}${x.name ? " · " + x.name : ""}`}>{x.no}</i>)}
 							{vs && <span className="drift">{vs === "added" ? t("vsAdded") : t("vsChangedOne")}</span>}
 							{!preview && <button className="at" onClick={() => mentionSlide(i + 1)} title={`${t("mention")} (@${i + 1})`} aria-label={`${t("mention")} @${i + 1}`}>@</button>}
 						</div>
 						<button className="thumb" draggable={!preview} onDragStart={(e) => { setDrag(i); dragSlide(e, sl.id); }} onDragEnd={() => { setDrag(null); setDropAt(null); }}
-							onClick={() => setCurrent(i)} title={[sl.title || `${i + 1}`, vs && vdiff ? `v${vdiff.base.n} ${vs === "added" ? t("vsAdded") : t("vsChangedOne")}` : "", lastFiles.has(sl.file) ? t("changed") : "", doerName].filter(Boolean).join(" · ")} aria-current={i === current}
-							data-seat={doer != null ? "" : undefined} style={doer != null ? ({ "--c": seatColor(seats, doer) } as React.CSSProperties) : undefined}>
+							onClick={() => setCurrent(i)} title={[sl.title || `${i + 1}`, vs && vdiff ? `v${vdiff.base.n} ${vs === "added" ? t("vsAdded") : t("vsChangedOne")}` : "", lastFiles.has(sl.file) ? t("changed") : ""].filter(Boolean).join(" · ")} aria-current={i === current}>
 							<ThumbFrame file={sl.file} rev={rev[sl.id] || 0} w={deck.size.w} h={deck.size.h} revHash={preview?.hash} />
 							{lastFiles.has(sl.file) && !preview && <span className="fresh" aria-label={t("changed")} />}
 						</button>

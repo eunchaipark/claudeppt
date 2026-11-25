@@ -9,8 +9,6 @@
 //   쪽 손보기            addSlide · duplicateSlide · moveSlide · removeSlide — 쪽 목록 · 우클릭 메뉴가 같이 쓴다
 //   대화                 send → claude 한 턴 → 그림 채우기 → 한 판으로 남김 → .claudeppt/talk.json
 //   바깥 작업            outside · OUTSIDE_MS — 앱 밖 Claude Code 가 방금 다룬 덱이면 send 가 보내기 전에 한 번 묻는다 (remote.ts touch)
-//   담당                 seats · presence · activity — 덱을 나눠 고치는 세션들 (seats.ts). attribute 가 폴더 감시의 변경을 담당에 잇고,
-//                        맡은 담당이 없는 변경은 strays 로 모은다. 담당이 고치는 중이라고 알린 쪽은 앱의 판에 섞지 않는다(heldFiles)
 //   직접 편집            applyDirect → 원본 HTML 에 되쓰고 잠시 뒤 한 판으로 남김
 //   판 · 릴리즈          refreshVersions · preview · restore · release (릴리즈 본체는 파일 끝 makeRelease — 바깥 CLI 도 쓴다)
 //   판 비교              startCompare · closeCompare · restoreSlide — 고른 판과 지금을 쪽마다 견주고 한 쪽만 되돌린다 (versions.ts)
@@ -18,7 +16,7 @@
 //   내보낸 PPTX 확인     verifyPptx — 내보내기 · 릴리즈 뒤 PowerPoint 가 그린 모양을 웹과 견주어 다를 때만 알린다 (check.ts) · fixDiff
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
-import { api, type Commit, localWriteAt } from "./api";
+import { api, type Commit } from "./api";
 import { type Deck, newId, readDeck, slideHtml, writeDeck } from "./deck";
 import { applyOp, type Op } from "./edits";
 import { type Built, buildPptx } from "./exportPptx";
@@ -31,7 +29,6 @@ import { markedPictures, type Shape, type Tool } from "./markup";
 import { type Mention, type VersionMention, mentionsIn, versionMentionsIn } from "./mention";
 import { type PinNote, systemPrompt, turnPrompt } from "./prompt";
 import { useSettings } from "./settings";
-import { type Activity, busy, owns, type Presence, readSeats, type Seat, writePresence, writeSeats } from "./seats";
 import { type VersionDiff, diffVersion, restoreSlide as restoreSlideFile, versionContext } from "./versions";
 
 /** 핀 하나 — shape 가 있으면 그어 놓은 표시(펜 · 화살표 · 상자)이고 x, y 는 그 번호 표식 자리다 (markup.ts) */
@@ -93,14 +90,6 @@ interface S {
 	vdiffMask: boolean;
 	/** 앱 밖 Claude Code 가 CLI 로 마지막에 다룬 덱 · 때 · 명령 (remote.ts touch). OUTSIDE_MS 안이면 그 덱에서 보내기 전에 한 번 묻는다 */
 	outside: { dir: string; at: number; cmd: string } | null;
-	/** 담당 정의 · 맡은 세션 · 한 일 (seats.ts) */
-	seats: Seat[];
-	presence: Record<string, Presence>;
-	activity: Activity[];
-	/** 담당이 방금 고친 쪽 — 쪽 id → 담당 번호 · 때. 쪽 목록이 담당 색으로 보인다 */
-	touched: Record<string, { seat: number; at: number }>;
-	/** 맡은 담당이 없는 변경 — 일하던 담당 누구의 범위에도 들지 않는 파일이 바뀌었다 */
-	strays: { path: string; at: number; seats: number[] }[];
 
 	openProject: (dir: string) => Promise<void>;
 	closeProject: () => Promise<void>;
@@ -141,12 +130,6 @@ interface S {
 	/** 요청칸에 @v<n> 을 넣는다 */
 	mentionVersion: (n: number) => void;
 	fixDiff: (report: Report) => void;
-	/** 담당 파일을 다시 읽는다 — 덱을 열 때 · CLI 가 알릴 때(remote.ts touch · refresh) · 몇 초마다 */
-	loadSeats: () => Promise<void>;
-	saveSeats: (seats: Seat[]) => Promise<void>;
-	/** 맡은 세션을 내보낸다 — 그 세션이 다시 join 하기 전까지 비어 있다 */
-	vacate: (no: number) => Promise<void>;
-	clearStrays: () => void;
 }
 
 let unlisten: (() => void)[] = [];
@@ -212,7 +195,7 @@ function directCommit(dir: string, get: () => S) {
 	const flush = async () => {
 		if (get().dir !== dir) return;
 		if (get().running) { directTimer = setTimeout(flush, 2000); return; }
-		await api.commit(dir, tNow("direct"), heldFiles(get())).catch(() => null);
+		await api.commit(dir, tNow("direct")).catch(() => null);
 		get().refreshVersions();
 	};
 	directTimer = setTimeout(flush, 4000);
@@ -258,38 +241,6 @@ const relOf = (dir: string, p?: string) => {
 	return a.toLowerCase().startsWith(d.toLowerCase()) ? a.slice(d.length) : a;
 };
 
-/** 담당이 「고치는 중」이라고 알린 쪽 파일 — 앱의 판(대화 턴 · 직접 편집)에 넣지 않는다. 넣으면 그 담당의 반쯤 고친 쪽이 앱 이름으로 남는다 */
-function heldFiles(st: S): string[] {
-	if (!st.deck) return [];
-	const ids = new Set(st.seats.flatMap((x) => (busy(st.presence[x.no]) ? st.presence[x.no].doing?.slides || [] : [])));
-	return st.deck.slides.filter((x) => ids.has(x.id)).map((x) => x.file);
-}
-
-/**
- * 폴더 감시가 잡은 변경을 담당에 잇는다. 앱이 쓴 변경(직접 편집 · 앱 안 Claude · 되돌리기)은 건너뛴다.
- * 누가 고쳤는지 파일만으로는 모른다 — 「고치는 중」이라고 알린 담당, 아니면 그 파일을 맡은 일하는 담당이 하나뿐일 때 그 담당으로 본다.
- * 일하는 담당이 있는데 누구의 범위에도 들지 않으면 strays 에 남긴다 (CLI 의 commit 도 그 파일을 판에 넣지 않는다)
- */
-function attribute(get: () => S, set: (p: Partial<S>) => void, paths: string[]) {
-	const { seats, presence, deck, running } = get();
-	if (!seats.length || !deck || running || Date.now() - localWriteAt() < 2500) return;
-	const live = seats.filter((x) => busy(presence[x.no]));
-	if (!live.length) return;
-	const now = Date.now();
-	const touched = { ...get().touched };
-	const strays = get().strays.filter((x) => !paths.includes(x.path));
-	// 덱 파일만 본다 — 편집기 · 셸이 잠깐 쓰는 임시 파일(slides/sedXXXX · *.tmp)과 폴더 자체의 변경까지 잡으면 헛경보가 쏟아진다.
-	// 2026.11.25 : 두 세션 동시 수정 시험에서 sed -i 의 임시 파일 20개가 「맡은 담당이 없는 변경」으로 떴다
-	for (const p of paths.filter((x) => /^slides\/[^/]+\.html$/.test(x) || x === "theme.css" || x === "deck.json")) {
-		const sl = deck.slides.find((x) => x.file === p);
-		const said = sl ? live.filter((x) => presence[x.no].doing?.slides.includes(sl.id)) : [];
-		const who = said.length ? said : live.filter((x) => owns(x, deck, p));
-		if (sl && who.length === 1) touched[sl.id] = { seat: who[0].no, at: now };
-		if (!who.length) strays.unshift({ path: p, at: now, seats: live.map((x) => x.no) });
-	}
-	set({ touched, strays: strays.slice(0, 20) });
-}
-
 export const useDeck = create<S>()((set, get) => ({
 	dir: "",
 	id: "",
@@ -315,11 +266,6 @@ export const useDeck = create<S>()((set, get) => ({
 	vdiff: null,
 	vdiffMask: true,
 	outside: null,
-	seats: [],
-	presence: {},
-	activity: [],
-	touched: {},
-	strays: [],
 
 	openProject: async (dir) => {
 		await get().closeProject();
@@ -330,11 +276,7 @@ export const useDeck = create<S>()((set, get) => ({
 		const talk = await readJson<{ sessionId: string | null; turns: Turn[] }>(dir, ".claudeppt/talk.json", { sessionId: null, turns: [] });
 		const releases = await readJson<Release[]>(dir, "releases/releases.json", []);
 		clearUndo();
-		set({ dir, id, deck, rev: {}, current: 0, mode: "edit", tool: "select", pins, turns: talk.turns, sessionId: talk.sessionId, versions: [], releases, preview: null, vdiff: null, touched: {}, strays: [] });
-		await get().loadSeats();
-		// 담당 세션은 앱이 꺼져 있어도 일한다 — CLI 의 알림(touch)이 없어도 몇 초마다 다시 읽어 「일하는 중」이 풀리는 것까지 보인다
-		const poll = setInterval(() => { if (get().dir === dir) get().loadSeats(); }, 8000);
-		unlisten.push(() => clearInterval(poll));
+		set({ dir, id, deck, rev: {}, current: 0, mode: "edit", tool: "select", pins, turns: talk.turns, sessionId: talk.sessionId, versions: [], releases, preview: null, vdiff: null });
 		useSettings.getState().remember(dir);
 		// 처음 여는 프로젝트(가져오기 직후)면 첫 판을 남긴다
 		const log = await api.log(dir, 1);
@@ -360,7 +302,6 @@ export const useDeck = create<S>()((set, get) => ({
 				if (all) for (const s of deck.slides) rev[s.id] = now;
 				if (paths.some((p) => p.endsWith(".css"))) for (const w of get().frames) tell(w, { t: "css" });
 				set({ rev });
-				attribute(get, set, paths);
 				if (get().vdiff) refreshCompare(get, set);
 			}),
 		);
@@ -416,7 +357,7 @@ export const useDeck = create<S>()((set, get) => ({
 		unlisten = [];
 		const { id } = get();
 		if (id) await api.close(id).catch(() => {});
-		set({ dir: "", id: "", deck: null, turns: [], pins: [], versions: [], preview: null, running: null, vdiff: null, seats: [], presence: {}, activity: [], touched: {}, strays: [] });
+		set({ dir: "", id: "", deck: null, turns: [], pins: [], versions: [], preview: null, running: null, vdiff: null });
 	},
 
 	setCurrent: (i) => set({ current: Math.max(0, Math.min(i, (get().deck?.slides.length || 1) - 1)) }),
@@ -515,7 +456,7 @@ export const useDeck = create<S>()((set, get) => ({
 		const s = useSettings.getState().s;
 		// 직접 편집이 남아 있으면 먼저 판으로 — Claude 의 판과 섞이지 않게
 		clearTimeout(directTimer);
-		await api.commit(dir, tNow("direct"), heldFiles(get())).catch(() => {});
+		await api.commit(dir, tNow("direct")).catch(() => {});
 		const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
 		const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
 		const cur = deck.slides[current];
@@ -560,7 +501,7 @@ export const useDeck = create<S>()((set, get) => ({
 				if (errs.length) patch((t) => ({ ...t, error: [t.error, ...errs].filter(Boolean).join("\n") }));
 			}
 			const summary = (text.trim() || notes.map((n) => n.text).join(" · ") || "핀").replace(/\s+/g, " ").slice(0, 72);
-			const c = await api.commit(dir, summary, heldFiles(get())).catch(() => null);
+			const c = await api.commit(dir, summary).catch(() => null);
 			patch((t) => ({ ...t, status, phase: undefined, version: c ? { n: c.n, short: c.short, hash: c.hash } : undefined }));
 		} catch (e) {
 			patch((t) => ({ ...t, status: "failed", error: String(e) }));
@@ -597,30 +538,6 @@ export const useDeck = create<S>()((set, get) => ({
 
 	undo: () => serial(() => step(get, undoStack, redoStack)),
 	redo: () => serial(() => step(get, redoStack, undoStack)),
-
-	loadSeats: async () => {
-		const { dir } = get();
-		if (!dir) return;
-		const r = await readSeats(dir);
-		if (get().dir !== dir) return;
-		// 몇 초마다 읽는다 — 바뀐 것이 없으면 상태를 건드리지 않아 화면이 다시 그려지지 않게
-		const st = get();
-		const same = JSON.stringify([r.seats, r.presence]) === JSON.stringify([st.seats, st.presence]) && r.activity.length === st.activity.length && r.activity.at(-1)?.at === st.activity.at(-1)?.at;
-		if (!same) set(r);
-	},
-	saveSeats: async (seats) => {
-		const { dir } = get();
-		set({ seats });
-		await writeSeats(dir, seats).catch((e) => get().notify(String(e), "err"));
-	},
-	vacate: async (no) => {
-		const { dir } = get();
-		const presence = { ...get().presence };
-		delete presence[no];
-		set({ presence });
-		await writePresence(dir, presence).catch((e) => get().notify(String(e), "err"));
-	},
-	clearStrays: () => set({ strays: [] }),
 
 	refreshVersions: async () => {
 		const { dir } = get();

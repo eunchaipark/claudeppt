@@ -15,7 +15,6 @@ mod imagegen;
 mod metafile;
 mod project;
 mod pptsnap;
-mod seats;
 mod vcs;
 mod watch;
 
