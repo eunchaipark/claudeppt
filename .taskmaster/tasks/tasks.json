@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": 1,
+        "id": "1",
         "title": "[M0] [고장] --resume 실패 시 세션 복구 + 「새 대화」 단추",
         "description": "세션을 못 찾으면 sessionId 를 비우고 새 세션으로 다시 돌린다. 지금은 비우는 길이 없어 덱이 영영 턴을 못 돈다.",
         "details": "뿌리: 세션 기록은 ~/.claude/projects/<작업 폴더 이름>/<id>.jsonl 에만 있어 덱 폴더를 옮기거나 .cppt 로 넘기면 --resume 이 실패하고, sessionId 를 비우는 길(store.ts:302,312)이 없어 그 덱은 영영 턴을 못 돈다. 고침: (1) 세션 id 를 앱이 정한다 — 처음은 --session-id <uuid>, 이후 --resume (init 사건을 기다리지 않음). (2) 턴이 끝날 때 jsonl 을 .claudeppt/sessions/<id>.jsonl 로 복사, 덱을 열 때 ~/.claude 쪽에 없으면 되돌려 놓는다(복사 뒤 --resume 이 되는지 먼저 실험). (3) 그래도 실패하면(stderr 'No conversation found with session ID') sessionId 를 새로 만들고 최근 몇 턴 요약을 앞에 붙여 한 번 재시도. (4) 대화 머리에 「새 대화」 단추. (5) pack 은 세션 jsonl 을 넣을지 고르게. 협업 0.8 구역 세션이 같은 장치를 쓴다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. 새 위치: store.ts:375·384 sessionId 채우기만, claude.rs:125-127 --resume, 「새 대화」 단추 없음.",
@@ -13,7 +13,7 @@
         "subtasks": []
       },
       {
-        "id": 2,
+        "id": "2",
         "title": "[M0] [고장] claude 실행 파일 탐색 보강",
         "description": "where claude 만 쓰는 탓에 ~/.local/bin(네이티브 설치 자리)이 PATH 에 없으면 못 찾는다. 이 PC 가 그렇다.",
         "details": "claude.rs:32-54 resolve(). 순서: 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → %APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe → %LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\claude.exe → HKCU\\Environment Path 다시 읽기. 찾은 경로는 AppState 에 기억(지금은 턴마다 동기 where 를 띄워 tokio 일꾼을 막는다). imagegen.rs 의 which 도 같은 도우미로. [0.6.0 재검증] 유효. claude.rs:32-54, 턴마다 :97 에서 동기로 다시 찾음, imagegen.rs:26 which.",
@@ -24,7 +24,7 @@
         "subtasks": []
       },
       {
-        "id": 3,
+        "id": "3",
         "title": "[M0] [고장] 앱 종료 시 claude 프로세스 정리",
         "description": "창을 닫아도 claude.exe 와 자식이 계속 돌며 파일을 고치고 사용량을 쓴다.",
         "details": "lib.rs:100 RunEvent::Exit 는 control::forget 만 한다. kill_on_drop(claude.rs:130)은 future drop 때만. Job Object(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)에 넣거나 최소한 ExitRequested 에서 runs 전부 taskkill /T. claude.rs:138 stdin 쓰기 실패 때 runs 항목 · system.md 가 남는 것도 정리. [0.6.0 재검증] 유효. lib.rs:100-104, claude.rs:130 · :137-139. 0.6.0 의 쉬는 틈 자동 설치(updater.ts:97)라는 종료 경로가 새로 생겼다 — 거기서도 claude 를 정리해야 한다.",
@@ -35,7 +35,7 @@
         "subtasks": []
       },
       {
-        "id": 4,
+        "id": "4",
         "title": "[M0] [고장] 프롬프트 ↔ 내보내기 규칙 맞추기 (글머리 목록이 그림으로 굳음)",
         "description": "rt.js 는 list-item 을 자식째 굽는데 prompt.ts 는 바탕만 굳는 쪽에 적어 둠. 그림자 설명도 낡음.",
         "details": "prompt.ts:35,63 · skill/SKILL.md:103 를 README 처럼 「도형 / 바탕만 그림 / 자식째 그림」 세 갈래로 다시 쓴다. rt.js:340-345 needsDeep 와 일치: list-item, mask, backdrop-filter, writing-mode, background-clip:text. 바깥 그림자 하나는 도형 그림자로 나간다(rt.js:346-357). 안전망으로 deck.ts:62 themeCss 에 .slide ul,.slide ol{list-style:none;padding:0} + 글머리 span 클래스. [0.6.0 재검증] 유효. prompt.ts:35 · :69, skill/SKILL.md:138-139 같은 오류, 실제는 rt.js:416-421 needsDeep · :422-430 simpleShadow.",
@@ -46,7 +46,7 @@
         "subtasks": []
       },
       {
-        "id": 5,
+        "id": "5",
         "title": "[M0] [고장] 멈춤이 안 듣는 구간 + 그림 공급자 시간 제한",
         "description": "claude 를 띄우기 전 · 그림 만드는 중에는 멈춤이 무시된다. 그림 공급자 요청에 timeout 이 없다.",
         "details": "store.ts:446-466 pid 생기기 전 claude_stop(claude.rs:171) 무효. store.ts:468/479 에서 status 를 done 으로 덮어씀. claudeRun 전 · 그림 사이마다 취소 확인, Rust 에 취소된 턴 목록. imagegen.rs:115,145 reqwest 에 120s timeout + Client 하나 공유, :191 CLI 공급자는 tokio::process + timeout 뒤 kill. [0.6.0 재검증] 유효. store.ts:542 · :564 · :574-579, claude.rs:171, imagegen.rs:115 · 145 · 191.",
@@ -57,7 +57,7 @@
         "subtasks": []
       },
       {
-        "id": 6,
+        "id": "6",
         "title": "[M0] [고장] openProject 동시 호출 시 리스너 중복",
         "description": "덱을 두 번 빨리 열거나 CLI open 과 겹치면 deck-fs · claude 리스너가 두 벌 붙어 답 글자가 두 번 찍힐 수 있다.",
         "details": "store.ts:256-316 listen 등록이 여러 await 뒤. 리스너를 모듈에서 한 번만 등록(이미 id · running 으로 거름)하거나 세대 번호로 늦은 호출을 버린다. 코드로 본 경합 — 재현 먼저. [0.6.0 재검증] 유효 + 넓어짐. store.ts:324-390(listen :344 · :368 앞에 await 9회+), :336 poll. App.tsx:41-43 에서 startRemote 와 resumeAfterUpdate 가 같은 때 openProject 를 부를 수 있다.",
@@ -68,7 +68,7 @@
         "subtasks": []
       },
       {
-        "id": 7,
+        "id": "7",
         "title": "[M0] [성능] git 명령 비동기화 + 덱별 잠금 + 호출 수 줄이기 + 전역 설정 격리",
         "description": "vcs_* 가 동기 명령이라 Tauri 메인 스레드에서 돈다. commit 한 번에 git 최대 8회(회당 약 40ms) → 턴 끝마다 약 0.3s 멈춤.",
         "details": "vcs.rs:48-149, project.rs:48/85/102/132, fsx.rs:30-85 를 #[tauri::command(async)] 또는 spawn_blocking 으로. AppState 에 덱 폴더별 Mutex(index.lock 충돌 방지) + CLI 동시 커밋 재시도. vcs_log 를 git log --decorate-refs=refs/tags 한 번으로, commit 은 status --porcelain 으로 3~4회로. GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=빈 파일, commit --no-verify, -c gc.auto=0. refreshVersions(store.ts:519)에 한도. 협업 기능의 선행 조건. [0.6.0 재검증] 일부 고쳐짐 — 프로세스 사이 판 잠금(vcs.rs:85-116)은 생겼다. 남음: vcs.rs:49 · 79 · 179 · 224 · 233 여전히 동기 pub fn(메인 스레드), commit_all :118-124 add -A, 커밋 한 번에 git 8회+, 전역 설정 격리 없음, store.ts:625-629 이력 한도 없음, project.rs · fsx.rs 동기. 더 급해짐: 잠금을 기다리며 thread::sleep 을 최대 60초(vcs.rs:96-116) — 담당 CLI 가 판을 남기는 동안 앱 창 전체가 멈춘다. 묵은 잠금 걷기 경합(vcs.rs:104-107)도 함께.",
@@ -79,7 +79,7 @@
         "subtasks": []
       },
       {
-        "id": 8,
+        "id": "8",
         "title": "[M0] [성능] 스트리밍 답 반영 묶기 + 대화 · 쪽 목록 다시 그리기 줄이기",
         "description": "text_delta 조각마다 set({turns}) → 모든 턴과 쪽 목록(Rail)이 다시 그려진다.",
         "details": "store.ts:301-304 리스너에서 delta 버퍼 → rAF 마다 한 번 patch. Talk.tsx:77 TurnView 를 memo, onVersion 을 안으로. Workspace.tsx:258,266 Rail 은 s.turns.at(-1)?.tools 만 구독, RailItem memo. Rust 쪽 claude.rs:157-159 emit 도 tauri::ipc::Channel 또는 30ms 묶음. 경계 끌기(Workspace.tsx:152-176)는 Rail·Stage·Talk memo + pointerup 때만 localStorage. [0.6.0 재검증] 유효 + 넓어짐. store.ts:374-378, Talk.tsx:79 · 165, Workspace.tsx:261 · 274 · 150-160, claude.rs:156-159. 추가: Workspace.tsx:271 useTick(10000) 이 담당이 있으면 쪽 목록 전체를 10초마다 다시 그린다.",
@@ -90,7 +90,7 @@
         "subtasks": []
       },
       {
-        "id": 9,
+        "id": "9",
         "title": "[M0] [성능] 떨어진 iframe 창 누수 고치기",
         "description": "unmount 정리 때 contentWindow 가 이미 null 이라 frames Set 에서 지워지지 않고 쌓인다.",
         "details": "Workspace.tsx:29-32. onLoad 에서 winRef.current=win 으로 잡고 정리에서 frames.delete(winRef.current). closeProject 에서 frames.clear(). 쪽 넘기기 · 핫 리로드 · 썸네일 · @ 미리보기마다 쌓인다. [0.6.0 재검증] 유효. Workspace.tsx:32-35, closeProject(store.ts:408-420)에서 frames 안 비움.",
@@ -101,7 +101,7 @@
         "subtasks": []
       },
       {
-        "id": 10,
+        "id": "10",
         "title": "[M0] [성능] 굽기(bake)마다 넣는 2.8MB 글꼴 줄이기",
         "description": "fontCss() 가 모든 @font-face 를 base64 data URL 로 바꿔 bake 마다 SVG 에 통째로 넣는다.",
         "details": "rt.js:228-237, 308-309. 복제본에 글자가 없으면(img · svg · 바탕만) 글꼴 서식 생략. 하위 트리 계산 fontFamily 에 나오는 가족만. 부모가 한 번 만들어 extract 메시지로 넘기기. 「숨은 iframe 이 답하지 않는다」 20s 시간 초과와의 관계도 확인. [0.6.0 재검증] 유효. rt.js:304-313 fontCss, :385.",
@@ -112,7 +112,7 @@
         "subtasks": []
       },
       {
-        "id": 11,
+        "id": "11",
         "title": "[M1] [성능] 핫 리로드 범위 좁히기 + deck:// 캐시 헤더",
         "description": "assets 파일 하나만 바뀌어도 모든 쪽 rev 를 올리고, 모든 응답이 no-store 라 iframe 마다 2MB 글꼴을 다시 받는다.",
         "details": "store.ts:286-288 새 파일은 무시, 덮어쓴 자산은 그 파일을 쓰는 쪽만. store.ts:280,290 바뀐 쪽이 있을 때만 set. lib.rs:166-173: assets 는 no-cache + ETag(mtime·크기), <id>@<커밋> 은 immutable, __rt.js 는 판 번호 붙인 주소 + max-age, 바이너리에 charset 빼기. @rev 는 (rev,path) LRU 또는 git cat-file --batch 상주. 요청 처리는 spawn_blocking. WebView2 가 가로챈 응답을 캐시하는지 실측. 협업 0.6 의 선행 — 원격(Funnel 대역폭 제한)에서 iframe 마다 2MB 글꼴을 다시 받으면 쓸 수 없다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. lib.rs:168-175, store.ts:353-362.",
@@ -123,7 +123,7 @@
         "subtasks": []
       },
       {
-        "id": 12,
+        "id": "12",
         "title": "[M0] [성능] 시스템 프롬프트의 바뀌는 값 빼기 (프롬프트 캐시)",
         "description": "Slides: N 이 시스템 프롬프트에 있어 쪽 수가 바뀔 때마다 이어 온 대화 전체 캐시가 깨진다.",
         "details": "prompt.ts:88 # Deck 구획을 turnPrompt 로 옮기고 번호 · 파일 · 제목 짧은 목차를 함께 넣어 deck.json 을 읽으러 오가는 일도 줄인다. 효과는 사용량 표시 작업의 cache_read 로 잰다. [0.6.0 재검증] 유효. prompt.ts:95.",
@@ -134,7 +134,7 @@
         "subtasks": []
       },
       {
-        "id": 13,
+        "id": "13",
         "title": "[M4] [성능] EMF 변환 묶음 처리",
         "description": "EMF 한 장마다 PowerShell 을 띄우고 Add-Type 으로 C# 를 새로 컴파일한다(0.85s/장).",
         "details": "metafile.rs:61-69, importPptx.ts:571-572. Add-Type -OutputAssembly 로 DLL 을 앱 데이터에 한 번 만들기 또는 목록을 한 번에 받는 묶음 명령. 장기: windows crate 로 GDI+ 직접. 미디어는 source/original.pptx 에서 Rust 가 바로 꺼내기(importPptx.ts:819). [0.6.0 재검증] 유효. metafile.rs:62-67, importPptx.ts:572.",
@@ -145,7 +145,7 @@
         "subtasks": []
       },
       {
-        "id": 14,
+        "id": "14",
         "title": "[M4] [성능] 내보내기: 그림 중복 제거 · 압축 정리 · check 를 Worker 로",
         "description": "같은 그림이 쪽 수만큼 저장되고, PNG 를 다시 DEFLATE 하며, 픽셀 비교가 메인 스레드에서 돈다.",
         "details": "exportPptx.ts:161, 253-292: ppt/media/* 해시로 rels Target 합치기, XML 만 DEFLATE · 미디어 STORE. 효과 없는 <img> 는 원본 바이트 + crop 으로(rt.js:341). exportPptx.ts:106,118 / check.ts:129 한 iframe 에서 extract+snapshot, iframe 2~3개 풀. check.ts:42-98 compare 를 pixdiff.ts 로 떼어 Worker + OffscreenCanvas, 저장은 convertToBlob → writeBytes. imagegen.ts:18-35 그림 생성 동시 2~3개. [0.6.0 재검증] 유효. exportPptx.ts:292.",
@@ -156,20 +156,20 @@
         "subtasks": []
       },
       {
-        "id": 15,
+        "id": "15",
         "title": "[M1] [성능] 썸네일을 PNG 캐시로 (동시 iframe 35~40개 줄이기)",
         "description": "쪽 목록 썸네일 · 이어 보기 · @ 고르기가 모두 live iframe 이다.",
         "details": "Workspace.tsx:322 rootMargin 100% → 25%, ResizeObserver · IntersectionObserver 하나로. 근본: rt.js snapshot PNG 를 .claudeppt/thumbs/ 에 내용 해시로, rev 가 바뀐 쪽만 offscreen 하나로 다시 굽기. 이어 보기(Workspace.tsx:660-696)는 보이는 범위 ±2 만 그리기 + FlowItem memo. 협업 0.6 의 선행 — 원격 쪽 목록은 PNG 만, iframe 은 무대 한 장. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. Workspace.tsx:337 · 711 rootMargin 100%.",
         "testStrategy": "",
         "status": "pending",
         "dependencies": [
-          9
+          "9"
         ],
         "priority": "high",
         "subtasks": []
       },
       {
-        "id": 16,
+        "id": "16",
         "title": "[M4] [성능] pptxgenjs · jszip 지연 로딩 (811KB 단일 청크)",
         "description": "store · remote · flows · versions 가 정적 import 라 시작 청크에 들어간다.",
         "details": "store.ts:21-22, remote.ts:16,20, flows.ts:5, versions.ts:13. versions.ts 는 check.compare 를 거쳐 pptxgenjs 까지 끈다 → compare 분리, import type, exportTo · verify · import 안에서 await import(). 로컬 앱이라 체감은 작다 — 시작 파싱 시간만. [0.6.0 재검증] 유효. store.ts:24-25, remote.ts:20 · 24, flows.ts:5, versions.ts:13.",
@@ -180,7 +180,7 @@
         "subtasks": []
       },
       {
-        "id": 17,
+        "id": "17",
         "title": "[M0] [업그레이드] Rust 중복 의존성 정리",
         "description": "reqwest 0.12/0.13, zip 2/9, dirs 6/7, base64 0.22/0.23 이 두 벌씩 컴파일된다(cargo tree -d 실측).",
         "details": "Cargo.toml: reqwest 0.13(default-features=false, json + rustls 계열, updater.rs 방식대로 setup 에서 crypto provider install_default), zip 9(SimpleFileOptions · start_file · add_directory · enclosed_name · by_index 그대로), dirs 7, base64 0.23. reqwest 0.12+rustls-tls 는 내장 webpki-roots 라 회사 루트 인증서를 안 믿는다는 판단 → 0.13 platform-verifier 로 바로잡힘(확인 필요). notify 9 · debouncer-mini 0.8 도 검토. Tauri 3 은 알파 — 2 유지. 끝나면 cargo tree -d 로 확인. [0.6.0 재검증] 유효. Cargo.toml 그대로.",
@@ -191,7 +191,7 @@
         "subtasks": []
       },
       {
-        "id": 18,
+        "id": "18",
         "title": "[M4] [업그레이드] JS 의존성: pptxgenjs 4.0.1 · npm audit · vite 설정",
         "description": "pptxgenjs 4 로 세로쓰기를 편집 가능한 글로. image-size(high, DoS) 감사 해소. Vite 8 __dirname 경고.",
         "details": "pptxgenjs 4.0.0: textDirection 추가 · exports 필드 · Vite/Worker 감지 수정. 이 코드가 기대는 곳: exportPptx.ts:253-288 groupSlides(add 하나=spTree 자식 하나), :183-186 표 여백 단위, rectRadius, softBreakBefore → 올린 뒤 check 돌리고 group: 경고 확인. rt.js:344 writingMode 조건 풀고 importPptx 에 bodyPr@vert. npm audit fix. vite.config.ts:10 __dirname → import.meta.dirname. @tauri-apps/cli 2.12.6. TypeScript 7 은 선택. [0.6.0 재검증] 유효. package.json:20, vite.config.ts:10.",
@@ -202,7 +202,7 @@
         "subtasks": []
       },
       {
-        "id": 19,
+        "id": "19",
         "title": "[M1] [보안] deck:// CSP · .cppt 임시물 제외 · 명령 경로 검증",
         "description": "슬라이드 스크립트가 같은 출처로 프로젝트 파일을 읽어 밖으로 보낼 수 있다. .cppt 에 붙여 넣은 화면 그림이 들어간다.",
         "details": "deck:// HTML 응답에 CSP: default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'none'. tauri.conf.json csp:null → 메인 창 CSP. fsx.rs:9-14 root 는 프로젝트 id 로 AppState 에서 찾기, abs_* 는 대화 상자 경로만, claude_path 는 Rust 가 settings 에서. project.rs:102-128 pack 에서 .claudeppt/attach · versions · check · shots 빼고 압축된 확장자는 Stored, io::copy 로 흘려 쓰기. 협업 기능의 선행 조건. 협업 0.6 의 선행 — 남의 브라우저가 슬라이드 스크립트를 돌린다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효 + 넓어짐. tauri.conf.json:27, lib.rs:168, fsx.rs:9-14, project.rs:112. pack 이 seats.json · presence.json(세션 id) · activity.jsonl · seats.lock · .git/claudeppt-commit.lock 까지 담는다 — 풀면 담당이 「맡음」으로 보이거나 판 남기기가 최대 60초 기다린다. pack 에서 이것들을 뺀다(seats.json 정의만은 남길지 고르게).",
@@ -213,20 +213,20 @@
         "subtasks": []
       },
       {
-        "id": 20,
+        "id": "20",
         "title": "[M4] [기능] 턴 끝 자동 점검 (넘침 · 그림으로 굳은 글)",
         "description": "앱 안 Claude 는 그린 결과를 못 본다. 턴이 끝나면 고친 쪽을 inspect 해 문제가 있으면 「고치기」 칩.",
         "details": "remote.ts:163-196 inspect 추출 재사용. 칩 → 이어 온 세션으로 한 번에 고치는 턴. 장기(L): --mcp-config 로 claudeppt.exe mcp 의 shot · inspect 를 도구로 줘 턴 안에서 스스로 확인. [0.6.0 재검증] 유효. remote.ts:249 inspect 만.",
         "testStrategy": "",
         "status": "pending",
         "dependencies": [
-          4
+          "4"
         ],
         "priority": "medium",
         "subtasks": []
       },
       {
-        "id": 21,
+        "id": "21",
         "title": "[M4] [기능] 사용량 표시 (컨텍스트 · 캐시 · 턴 수 · 시간)",
         "description": "지금은 total_cost_usd 만 남기고 마우스를 올려야 보인다.",
         "details": "store.ts:313, Talk.tsx:189. result 사건의 usage(cache_read · cache_creation · input · output), num_turns, duration_ms 저장 → 「컨텍스트 82k · 캐시 94% · 6회 · 41s」. 컨텍스트가 크면 「새 대화」 권유. --max-turns(예 60) + error_max_turns 때 「이어서」, stdout 10분 무응답 시 kill, claude.rs:157 lines() 대신 read_until(깨진 UTF-8 에서 멈춤 방지). 글꼴 찾기는 sonnet · low 고정(fonts.ts:148), system.md 를 턴별 파일로(claude.rs:101,163). [0.6.0 재검증] 유효. store.ts:384-386, Talk.tsx:191 · 213, claude.rs:157 · 101 · 163.",
@@ -237,7 +237,7 @@
         "subtasks": []
       },
       {
-        "id": 22,
+        "id": "22",
         "title": "[M4] [기능] SmartArt 가져오기",
         "description": "ppt/diagrams/drawingN.xml 에 배치가 끝난 dsp:sp 가 있어 p:sp 처럼 그릴 수 있다.",
         "details": "importPptx.ts:761-763 자리. dsp:dataModelExt@relId → 쪽 rels → drawing. 이름 접두어 맞추고 frame 좌표만큼 옮겨 shapeHtml 재사용. 좌표 기준(frame 기준인지) 확인. 다음 후보: 프리셋 도형 수식 계산기(presetShapeDefinitions.xml, M) → 내보낼 때 addShape(prst), 차트(L), 넣어 둔 글꼴(L). [0.6.0 재검증] 유효. importPptx.ts:724.",
@@ -248,7 +248,7 @@
         "subtasks": []
       },
       {
-        "id": 23,
+        "id": "23",
         "title": "[M4] [기능] 턴별 차이 보기",
         "description": "지금 비교는 「고른 판 ↔ 지금」뿐. 판 마디에 「이 턴이 바꾼 것」(바로 앞 판 ↔ 그 판)을 더한다.",
         "details": "versions.ts · VersionLens.tsx 재사용. 「지난 턴 뒤 바뀐 파일」(직접 편집 · 바깥 CLI · 되돌리기)을 git diff 로 뽑아 다음 턴 요청문에 넣는 것도 함께. [0.6.0 재검증] 유효. 담당 판도 범위에 넣는다.",
@@ -259,7 +259,7 @@
         "subtasks": []
       },
       {
-        "id": 24,
+        "id": "24",
         "title": "[M0] [문서] README 를 코드에 맞추기",
         "description": "EMF 는 이미 PNG 로 바꾸고 숫자 좌표 자유형 도형도 그리는데 README 는 못 한다고 적혀 있다.",
         "details": "README 「PPTX 가져오기가 옮기는 것」. claude.rs:7 「설정 › Claude 에서 고친다」 낡은 주석도. 위 작업들이 끝날 때마다 해당 구획 갱신. [0.6.0 재검증] 유효. README.md:156, claude.rs:7.",
@@ -278,18 +278,19 @@
         "priority": "medium",
         "description": "앱이 쓰는 플래그(--safe-mode · --permission-prompts · --session-id · --settings · --setting-sources)가 없는 옛 판이면 첫 턴에서 이상하게 실패한다.",
         "details": "claude_detect(claude.rs:57)에서 --version 과 함께 --help 를 한 번 읽어 필요한 플래그가 있는지 보고 결과를 기억. 없으면 설정 화면 · 첫 턴 전에 「claude update 필요」 알림. 2.1.299 에서 모두 확인됨. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. claude.rs:56-65.",
-        "id": 25
+        "id": "25"
       },
       {
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "subtasks": [],
         "dependencies": [],
         "title": "[M0] [고장] 담당 정의(seats.json)가 덮어써져 사라질 수 있다",
         "priority": "high",
         "description": "앱이 seats.json · presence.json 을 잠금 없이, 원자적이지 않게 덮어쓴다. 쓰는 도중 바깥 세션이 join 하면 담당이 없다고 읽고 「모든 권한 1번」으로 덮어써 사용자가 정한 담당이 사라진다. 0.5.0 에서 생김.",
-        "details": "store.ts:611-622 saveSeats · vacate 가 최대 8초 묵은 화면 사본을 api.writeText → fsx.rs:36-40 std::fs::write(비원자적)로 쓴다. seats.rs 의 잠금(seats.lock)을 거치지 않아 CLI 의 join · adopt · doing · seen 변경을 덮어쓴다. 쓰는 중 CLI 가 읽으면 seats.rs read() 가 None → list() 빈 목록 → join()(seats.rs:235-238)이 1번 모든 권한을 만들어 save. 고침: 담당 쓰기를 Rust 명령으로 옮겨 seats.rs 잠금 + 임시 파일 바꿔 달기(seats.rs write 와 같은 방식)로, 화면은 바뀐 칸만 보내 잠금 안에서 최신 파일에 합친다. join 은 파일이 있는데 못 읽었으면 빈 목록으로 보지 말고 잠시 뒤 다시 읽기. 원본에 보낼 첫 PR 후보.",
-        "id": 26
+        "details": "store.ts:611-622 saveSeats · vacate 가 최대 8초 묵은 화면 사본을 api.writeText → fsx.rs:36-40 std::fs::write(비원자적)로 쓴다. seats.rs 의 잠금(seats.lock)을 거치지 않아 CLI 의 join · adopt · doing · seen 변경을 덮어쓴다. 쓰는 중 CLI 가 읽으면 seats.rs read() 가 None → list() 빈 목록 → join()(seats.rs:235-238)이 1번 모든 권한을 만들어 save. 고침: 담당 쓰기를 Rust 명령으로 옮겨 seats.rs 잠금 + 임시 파일 바꿔 달기(seats.rs write 와 같은 방식)로, 화면은 바뀐 칸만 보내 잠금 안에서 최신 파일에 합친다. join 은 파일이 있는데 못 읽었으면 빈 목록으로 보지 말고 잠시 뒤 다시 읽기. 원본에 보낼 첫 PR 후보. [완료 2026-11-25] PR a7garden/claudeppt#3 으로 원본에 합쳐졌다(0.7.0, 커밋 2a5adaf). 관리자 요청 세 가지(임시 파일 + 이름 바꾸기, 같은 seats.lock, 없음/못 읽음 가르기)를 담았다.",
+        "id": "26",
+        "updatedAt": "2026-11-25T07:25:57.384Z"
       },
       {
         "testStrategy": "",
@@ -300,7 +301,7 @@
         "priority": "high",
         "description": "0.6.0 자동 설치가 담당 세션이 일하는 중인지 보지 않고, 바깥 세션 대기 기준(2분)이 앱 스스로 쓰는 기준(3~5분)보다 짧으며, 창을 떠나 있으면 쓰던 요청 글 · 스케치를 확인하지 않는다.",
         "details": "updater.ts:112-121 quiet(): presence(busy · doing) 미확인, OUTSIDE_QUIET_MS 2분 < store.ts:238-240 5분 · seats.ts:31 3분, away 면 커서 검사 건너뜀 — Talk.tsx:327-328 요청칸 글은 useState 라 재시작 때 사라진다. CHANGELOG 의 「커서가 있으면 기다린다」와 어긋남. 고침: busy 한 담당이 있으면 미루기, 바깥 기준을 앱 기준과 맞추기, 보내지 않은 요청 글 · 스케치 · 핀 초안이 있으면 미루거나 저장 후 복원, 재시작 전에 claude 프로세스 정리(#3). 협업 중(M1~)에는 접속자가 있으면 미루기. 원본에 보낼 PR 후보.",
-        "id": 27
+        "id": "27"
       },
       {
         "testStrategy": "",
@@ -311,7 +312,7 @@
         "priority": "medium",
         "description": "앱 턴 · 직접 편집 판이 「고치는 중」이라고 알린 쪽 파일만 빼고 add -A 로 담아, 담당이 고치던 theme.css · deck.json · assets · 알리지 않은 쪽이 앱 이름의 판에 들어간다.",
         "details": "store.ts:262-266 heldFiles 가 presence.doing 의 쪽만 뺀다. 담당 commit 이 돌려준 left, 알리지 않은 쪽, theme.css · deck.json · assets 는 vcs.rs:119 add -A 로 앱 판에. 고침: 살아 있는 담당(busy)의 맡은 범위(seats::allows) 전체를 빼고, 앱 판은 앱이 바꾼 경로만(턴 동안 attribute 로 모은 경로) 담는다. #7 의 경로 단위 커밋과 같이.",
-        "id": 28
+        "id": "28"
       },
       {
         "testStrategy": "",
@@ -322,7 +323,7 @@
         "priority": "low",
         "description": "cli.rs 가 바뀐 파일 목록을 판 잠금을 잡기 전에 계산한다. 그 사이 앱이 판을 남기면 목록이 낡고, 지운 파일이면 add 가 실패한다.",
         "details": "cli.rs:732 changed() 를 잠금 밖에서. 고침: 잠금을 잡은 뒤 계산. 묵은 잠금 걷기 경합(vcs.rs:104-107, 2분 넘게 묵었을 때만)은 잠금 파일에 pid · 시각을 적고 걷기 전에 다시 확인.",
-        "id": 29
+        "id": "29"
       },
       {
         "testStrategy": "",
@@ -333,13 +334,18 @@
         "priority": "low",
         "description": "담당 기록은 덧붙이기만 하는데, 앱은 8초마다 파일 전체를 동기 명령으로 읽고 마지막 200줄만 쓴다.",
         "details": "seats.rs:94-100 · seats.ts:45 · store.ts:336. 고침: 일정 크기(예 1MB) 넘으면 앞을 잘라 activity.1.jsonl 로 돌리기, 앱은 끝에서부터 읽기(Rust 명령, 비동기). 원격(M1)에서는 8초 폴링 대신 사건.",
-        "id": 30
+        "id": "30"
       }
     ],
     "metadata": {
-      "created": "2026-11-25T02:24:07.222Z",
-      "updated": "2026-11-25T05:30:11.717Z",
-      "description": "안정화 · 최적화 백로그 — 원본 0.6.0 기준 재검증(2026-11-25). M0 = 먼저 원본에 보낼 고장 수정"
+      "version": "1.0.0",
+      "lastModified": "2026-11-25T07:25:57.385Z",
+      "taskCount": 30,
+      "completedCount": 1,
+      "tags": [
+        "master"
+      ],
+      "updated": "2026-11-25T07:26:16.109Z"
     }
   },
   "collab": {
