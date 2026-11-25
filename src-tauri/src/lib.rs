@@ -145,9 +145,16 @@ fn serve(app: &tauri::AppHandle, raw: &str) -> Response<Vec<u8>> {
 	let mime = mime_of(rel);
 	if mime == "text/html" {
 		bytes = inject_runtime(&bytes);
+		let mut r = ok(mime, bytes);
+		r.headers_mut().insert("Content-Security-Policy", tauri::http::HeaderValue::from_static(SLIDE_CSP));
+		return r;
 	}
 	ok(mime, bytes)
 }
+
+/// 슬라이드 문서가 연결할 수 있는 곳 — 자기 덱(같은 출처)의 파일 · data: · blob: 만. 그림 · 글꼴 · CSS 를 읽는 것은 막지 않는다.
+/// 슬라이드는 앱 화면과 다른 출처라도 앱이 등록한 프로토콜이라 웹뷰가 앱 안으로 본다 — 연결 범위를 좁혀 슬라이드 스크립트가 자기 덱 밖으로 요청을 보내지 못하게 한다
+const SLIDE_CSP: &str = "connect-src 'self' data: blob:; form-action 'none'; object-src 'none'; base-uri 'self'";
 
 /// 런타임 스크립트는 파일에 쓰지 않고 내줄 때만 붙인다 — Claude 가 고치는 원본을 깨끗하게 두고,
 /// 직접 편집으로 다시 쓸 때도 섞여 들어가지 않게.
