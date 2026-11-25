@@ -195,40 +195,43 @@
         "id": "6",
         "title": "[C1] 전송층 분리 — 같은 화면이 Tauri 와 브라우저 양쪽에서",
         "description": "api.ts 의 invoke · listen · deckUrl 을 transport 한 층으로 모은다. 호스트 앱은 Tauri, 브라우저는 WebSocket/HTTP.",
-        "details": "api.ts 의 명령을 transport.call(name,args) 로, listen 쓰는 곳(store.ts · remote.ts · fonts.ts · Settings.tsx)을 transport.on 으로. 원격에서는 Tauri 전용(대화 상자 · 창 단추 · 내보내기 · 설정)을 숨긴다(capabilities 플래그). 호스트 동작은 그대로여야 한다. 함께: openProject 를 겹쳐 불러도 사건 리스너가 두 벌 붙지 않게 모듈에서 한 번만 등록(원격 접속이 늘면 글자가 두 번 찍힌다, 옛 master #6). 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "api.ts 의 명령을 transport.call(name,args) 로, listen 쓰는 곳(store.ts · remote.ts · fonts.ts · Settings.tsx)을 transport.on 으로. 원격에서는 Tauri 전용(대화 상자 · 창 단추 · 내보내기 · 설정)을 숨긴다(capabilities 플래그). 호스트 동작은 그대로여야 한다. 함께: openProject 를 겹쳐 불러도 사건 리스너가 두 벌 붙지 않게 모듈에서 한 번만 등록(원격 접속이 늘면 글자가 두 번 찍힌다, 옛 master #6). 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f(합쳐 올라감) · bee1818. transport.ts(call: Tauri invoke / 원격 /_/rpc 읽기만, 경로→id), api.ts 를 그 위로, deckUrl 원격은 /_/deck. store 리스너 앱에 한 벌(listening ??=). 원격은 listen 을 쓰는 길(openProject · startRemote · fonts · Settings)을 타지 않게 막음. 시험: tsc · 호스트 개발 실행에서 새 덱 · 쪽 추가 · 직접 편집 판 · 가짜 턴 그대로",
         "testStrategy": "tsc · 호스트 개발 실행에서 기존 흐름(새 덱 · 직접 편집 · 턴 · 판) 그대로 · transport 단위 시험",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:33:51.280Z"
       },
       {
         "id": "7",
         "title": "[C1] 협업 서버 — 「설정 › 협업」(기본 꺼짐) 뒤 axum HTTP + WebSocket",
         "description": "호스트 앱 안에 서버를 띄워 앱 화면 · 슬라이드 · 원격 API · 사건을 내준다. 켜기 전에는 아무것도 바뀌지 않는다.",
-        "details": "axum 0.8(ws) + tower-http. 화면은 Tauri asset_resolver(개발 실행은 Vite 1424 프록시), 슬라이드는 lib.rs serve() 재사용(경로 검사 포함), 사건: 파일 변경 · 턴 글자(30ms 묶음) · 세션 · 판 · 접속 · 의견, 일련번호 + 재접속 다시 받기. 원격 API 는 허용 목록뿐. 모든 요청에 토큰/쿠키(C2 전에는 호스트가 만든 임시 토큰). 바인드: 켜면 LAN, 끄면 닫음. 먼저 기술 검증: asset_resolver 로 화면 내주기, WebSocket 왕복. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "axum 0.8(ws) + tower-http. 화면은 Tauri asset_resolver(개발 실행은 Vite 1424 프록시), 슬라이드는 lib.rs serve() 재사용(경로 검사 포함), 사건: 파일 변경 · 턴 글자(30ms 묶음) · 세션 · 판 · 접속 · 의견, 일련번호 + 재접속 다시 받기. 원격 API 는 허용 목록뿐. 모든 요청에 토큰/쿠키(C2 전에는 호스트가 만든 임시 토큰). 바인드: 켜면 LAN, 끄면 닫음. 먼저 기술 검증: asset_resolver 로 화면 내주기, WebSocket 왕복. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f. collab.rs(axum 0.8): /_/ws · /_/rpc(read·exists·log만) · /_/deck(serve 재사용) · /__rt.js · 화면(설치 판 asset_resolver, 개발은 Vite 넘김). 열쇠: ?k= → 쿠키(HttpOnly·SameSite=Lax) + 주소에서 뗌. 의도 허용 목록(INTENTS) · 3시간 대기. 설정 › 협업 탭(기본 꺼짐). 시험: cargo test 3개 · curl: 열쇠 없음/틀림 401, 링크 303+쿠키, 슬라이드 200+런타임, ..%5C·../ 403, rpc 읽기 OK · 밖 경로 400 · write 400 · log OK. 호스트 새로 고침 뒤 다시 붙음(resumeHost)",
         "testStrategy": "cargo test(라우팅 · 허용 목록 · 토큰 없는 요청 401) · 개발 실행에서 켜고 브라우저(CDP 새 탭)로 /app 열기",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "6"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:33:51.376Z"
       },
       {
         "id": "8",
         "title": "[C1] 브라우저로 같이 보기 + 누가 어디 보는지",
         "description": "팀원 브라우저가 같은 덱을 실시간으로 본다. 쪽 목록 · 무대 · 이어 보기 · 대화(세션 목록 포함) · 판 목록. 누가 어느 쪽을 보는지 표시.",
-        "details": "원격 화면은 같은 React 를 transport=remote 로. 파일 변경 사건으로 바뀐 쪽만 다시 그림. 접속 표시: 썸네일 옆 사람 머리글자, 무대 머리 「보는 중: …」, 사람을 누르면 따라가기. 글꼴: 호스트에 깔린 local() 글꼴은 /fonts 로 내줌. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "원격 화면은 같은 React 를 transport=remote 로. 파일 변경 사건으로 바뀐 쪽만 다시 그림. 접속 표시: 썸네일 옆 사람 머리글자, 무대 머리 「보는 중: …」, 사람을 누르면 따라가기. 글꼴: 호스트에 깔린 local() 글꼴은 /fonts 로 내줌. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f. 원격=같은 React, 호스트 상태(덱·턴·세션·판·핀) 바뀐 칸만 30ms 묶어 방송, 턴은 바뀐 턴만. 보는 사람 몫(보는 쪽·지금 대화·도구) 따로. 접속 표시: 쪽 목록 번호 옆 · 무대 오른쪽 위 머리글자(누르면 그 쪽으로) · 제목 줄 n명 접속. 시험: Edge(9334)로 LAN 주소 링크 → 덱 보임, 호스트가 쪽 추가 · 글 고침 → 브라우저 바로 반영, 가짜 턴 글자 흐름 · 세션 · 판 반영, 이름 민수 → 호스트 쪽 목록 · 무대에 민, 호스트 보는 쪽 → 브라우저에 은. 글꼴(/fonts) 은 #9 에서",
         "testStrategy": "개발 실행 + 브라우저 탭 둘(CDP)로: 호스트에서 고친 쪽이 브라우저에 다시 그려지는지, 보는 쪽 표시가 오가는지, 스크린샷",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "7"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:33:51.463Z"
       },
       {
         "id": "9",
@@ -352,9 +355,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T10:18:48.140Z",
+      "lastModified": "2026-11-25T10:33:51.092Z",
       "taskCount": 17,
-      "completedCount": 5,
+      "completedCount": 8,
       "tags": [
         "collab"
       ]
