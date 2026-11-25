@@ -5,22 +5,27 @@
 // 2026.11.25 : 누르지 않아도 설치한다 (설정 「자동 설치」 · 기본 켬). 찾으면 뒤에서 내려받아 두고, 방해되지 않는 때에 설치하고 다시 켠다.
 //              다시 켜면 설치하던 때 열려 있던 덱을 다시 연다 (App.tsx resumeAfterUpdate).
 //   방해되지 않는 때   앱 안 Claude 가 쉬고 · 화면을 막는 일(내보내기 · 되돌리기)과 뒤 일(가져오기 · 검사)이 없고 ·
-//                     앱 밖 Claude Code 가 2분 넘게 이 앱을 부르지 않았고 · 창을 2분 넘게 떠나 있었거나 5분 넘게 손대지 않았을 때.
+//                     앱 밖 Claude Code 가 5분 넘게 이 앱을 부르지 않았고 · 요청칸에 보내지 않은 글 · 첨부가 없고 ·
+//                     창을 2분 넘게 떠나 있었거나 5분 넘게 손대지 않았을 때.
 //                     글을 고치거나 Claude 의 턴이 도는 중에 앱이 꺼지면 그 일이 끊긴다 — 그래서 사람이 쉬는 틈을 기다린다
+// 2026.11.25 : 요청칸에 써 두고 자리를 비우면(창을 2분 떠남) 설치해 다시 켜며 그 글 · 첨부가 사라졌다 — 보내지 않은 글이 있으면 미룬다.
+//              바깥 Claude Code 기준(2분)이 보내기 전에 묻는 기준(store OUTSIDE_MS 5분)보다 짧아, 묻는 동안에도 설치될 수 있었다 — 같은 값을 쓴다
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useEffect } from "react";
 import { create } from "zustand";
+import { useAttach } from "./attach";
 import { useSettings } from "./settings";
-import { useDeck } from "./store";
+import { OUTSIDE_MS, useDeck } from "./store";
 
 const CHECK_EVERY_MS = 60 * 60 * 1000;
 const STALE_MS = 30 * 60 * 1000;
 /** 창을 떠나 있은 시간 · 손대지 않은 시간 — 이만큼이면 쉬는 틈으로 본다 */
 const AWAY_MS = 2 * 60 * 1000;
 const IDLE_MS = 5 * 60 * 1000;
-/** 앱 밖 Claude Code 의 마지막 명령 뒤 이만큼은 설치하지 않는다 — 그 세션의 다음 명령이 꺼진 앱을 다시 띄우며 엉킨다 */
-const OUTSIDE_QUIET_MS = 2 * 60 * 1000;
+/** 앱 밖 Claude Code 의 마지막 명령 뒤 이만큼은 설치하지 않는다 — 그 세션의 다음 명령이 꺼진 앱을 다시 띄우며 엉킨다.
+ *  보내기 전에 「앱 밖 Claude Code 가 방금 다뤘다」고 묻는 기준과 같다 */
+const OUTSIDE_QUIET_MS = OUTSIDE_MS;
 /** 다시 켠 뒤 열 덱 */
 export const RESUME_KEY = "claudeppt.resume";
 
@@ -108,11 +113,23 @@ let lastInput = Date.now();
 let leftAt: number | null = null;
 const touched = () => { lastInput = Date.now(); };
 
-/** 지금 설치해도 되는가 */
-function quiet(): boolean {
+/** 요청칸에 보내지 않은 글이 있는가 — 요청칸(Talk.tsx)이 알린다. 다시 켜면 그 글이 사라진다 */
+let drafting = false;
+export const noteDraft = (on: boolean) => { drafting = on; };
+
+/** 지금 설치하면 끊기는 일 — 있으면 그 까닭, 없으면 null */
+export function holdsUpdate(): "work" | "draft" | "outside" | null {
 	const d = useDeck.getState();
-	if (d.running || d.busy || d.jobs.length) return false;
-	if (d.outside && Date.now() - d.outside.at < OUTSIDE_QUIET_MS) return false;
+	if (d.running || d.busy || d.jobs.length) return "work";
+	// 보내지 않은 요청 글 · 첨부는 다시 켜면 사라진다 (핀은 덱에 남아 그대로다)
+	if (drafting || useAttach.getState().files.length) return "draft";
+	if (d.outside && Date.now() - d.outside.at < OUTSIDE_QUIET_MS) return "outside";
+	return null;
+}
+
+/** 지금 설치해도 되는가 — 끊기는 일이 없고, 사람이 쉬는 틈이다 */
+function quiet(): boolean {
+	if (holdsUpdate()) return false;
 	const away = leftAt != null && Date.now() - leftAt >= AWAY_MS;
 	// 슬라이드 · 입력칸에 커서가 있으면 손을 놓고 있어도 글을 고치는 중일 수 있다 — 창을 떠날 때까지 기다린다
 	const tag = document.activeElement?.tagName;

@@ -20,6 +20,7 @@ import { copyText, openMenu } from "./ContextMenu";
 import { SLIDE_MIME, SlideFrame } from "./Workspace";
 import { useSettings } from "../lib/settings";
 import { routeOf, type Turn, useDeck } from "../lib/store";
+import { noteDraft } from "../lib/updater";
 
 /** 사이드바 접힘 — 보는 사람의 편의라 이 PC 에만 남긴다. seen 은 접을 때 본 마지막 턴(그 뒤 끝난 턴이 「새 답」) */
 interface Fold { folded: boolean; seen: string | null; draft: boolean; set: (v: boolean) => void }
@@ -385,9 +386,10 @@ function Composer() {
 		el.style.height = "auto";
 		el.style.height = Math.min(220, el.scrollHeight) + "px";
 	}, [text]);
-	// 접힌 등뼈가 「쓰던 글이 있다」를 보이게 알린다
+	// 접힌 등뼈가 「쓰던 글이 있다」를 보이게 알린다. 쉬는 틈 자동 설치도 미룬다 — 다시 켜면 이 글이 사라진다 (updater.ts)
 	const hasDraft = !!text.trim();
-	useEffect(() => { useTalkFold.setState({ draft: hasDraft }); }, [hasDraft]);
+	useEffect(() => { useTalkFold.setState({ draft: hasDraft }); noteDraft(hasDraft); }, [hasDraft]);
+	useEffect(() => () => noteDraft(false), []);
 	// 핀이 새로 꽂히면 대화를 편다 — 접힌 채로 두면 의견을 적을 칸이 보이지 않는다
 	const pinCount = useRef(pins.length);
 	useEffect(() => { if (pins.length > pinCount.current) openTalk(false); pinCount.current = pins.length; }, [pins.length]);
