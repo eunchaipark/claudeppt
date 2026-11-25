@@ -158,7 +158,8 @@ function VersionList({ onClose }: { onClose: () => void }) {
 						{/* 대화의 판 알약과 같은 모양 — 지금 판만 채운다 */}
 						<span className={"node" + (c === head ? " head" : "")}>v{c.n}</span>
 						<span className="s"><span>{c.subject}</span>{rel && <i className="rtag">{rel}</i>}</span>
-						<span className="d">{c.date.slice(5, 16)}</span>
+						{/* 누가 시킨 판인지 — 팀원 이름. 바깥 CLI 처럼 이름 없이 남은 판(ClaudePPT)은 때만 */}
+						<span className="d">{c.author && c.author !== "ClaudePPT" ? `${c.author} · ` : ""}{c.date.slice(5, 16)}</span>
 					</button>
 				);
 			})}

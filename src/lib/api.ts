@@ -1,7 +1,8 @@
 // 백엔드(src-tauri) 명령을 부르는 얇은 층. 이름은 Rust 명령과 같다.
 import { invoke } from "@tauri-apps/api/core";
 
-export interface Commit { n: number; hash: string; short: string; date: string; subject: string; tags: string[] }
+/** author — 이 판을 시킨 팀원 이름 (직접 편집 · 바깥 CLI 의 판은 ClaudePPT) */
+export interface Commit { n: number; hash: string; short: string; date: string; subject: string; tags: string[]; author: string }
 export interface LibItem { dir: string; deck: any; modified: number }
 /** 설정 「바깥 연결」 — 통로 · 최근 바깥 명령 · 스킬 상태 (control.rs remote_info) */
 export interface RemoteInfo {
@@ -39,10 +40,11 @@ export const api = {
 	reveal: (path: string) => invoke<void>("reveal", { path }),
 
 	vcsInit: (dir: string) => invoke<void>("vcs_init", { dir }),
-	commit: (dir: string, message: string) => invoke<Commit | null>("vcs_commit", { dir, message }),
+	/** author — 이 판을 시킨 팀원 이름. 주면 git 작성자로 남는다 */
+	commit: (dir: string, message: string, author?: string) => invoke<Commit | null>("vcs_commit", { dir, message, author: author || null }),
 	log: (dir: string, limit?: number) => invoke<Commit[]>("vcs_log", { dir, limit }),
 	tag: (dir: string, name: string) => invoke<void>("vcs_tag", { dir, name }),
-	restore: (dir: string, hash: string, message: string) => invoke<Commit | null>("vcs_restore", { dir, hash, message }),
+	restore: (dir: string, hash: string, message: string, author?: string) => invoke<Commit | null>("vcs_restore", { dir, hash, message, author: author || null }),
 
 	claudeDetect: (path: string) => invoke<{ path: string; version: string } | null>("claude_detect", { path }),
 	claudeRun: (spec: { turn: string; dir: string; prompt: string; system: string; claudePath: string; model: string; effort: string; resume?: string | null; mode?: "fonts" }) => invoke<{ code: number; stderr: string }>("claude_run", { spec }),

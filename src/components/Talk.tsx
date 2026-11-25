@@ -13,6 +13,7 @@ import { useT } from "../lib/i18n";
 import { isVersionQuery, mentionCandidates, mentionTokens, mentionsIn, typingMention, versionCandidates, versionMentionsIn, versionTokens } from "../lib/mention";
 import { copyText, openMenu } from "./ContextMenu";
 import { SLIDE_MIME, SlideFrame } from "./Workspace";
+import { useSettings } from "../lib/settings";
 import { type Turn, useDeck } from "../lib/store";
 
 /** 사이드바 접힘 — 보는 사람의 편의라 이 PC 에만 남긴다. seen 은 접을 때 본 마지막 턴(그 뒤 끝난 턴이 「새 답」) */
@@ -68,6 +69,7 @@ export default function Talk() {
 					<b>{t("talk")}</b>
 					{/* 지금 판 번호는 제목 줄에 있다 — 여기서는 턴 수만 */}
 					{turns.length > 0 && <span className="mono">{turns.length}{t("talkTurns")}</span>}
+					{turns.length > 0 && <button className="talk-new" onClick={() => useDeck.getState().newTalk()} title={t("newTalkHint")}>{t("newTalk")}</button>}
 					<button className="talk-fold" onClick={() => useTalkFold.getState().set(true)} aria-expanded={true} title={`${t("talkFold")} (Ctrl+B)`} aria-label={t("talkFold")}>
 						<PanelIcon open />
 					</button>
@@ -196,6 +198,8 @@ function TurnView({ turn, head: isHead, onVersion }: { turn: Turn; head: boolean
 			{/* 요청 — 내가 쓴 것은 옅은 칸에 담아 답과 가른다. 핀은 그 칸 안에 */}
 			{(turn.request || turn.pins.length > 0) && (
 				<div className="req">
+					{/* 보낸 팀원 — 같은 세션을 여럿이 이어 쓰므로 요청마다 누가 시켰는지 남긴다 */}
+					{turn.by && <div className="req-by">{turn.by}</div>}
 					{turn.request && <div className="req-text"><Mentioned text={turn.request} turn={turn} /></div>}
 					{turn.pins.length > 0 && (
 						<div className="req-pins">
@@ -207,10 +211,11 @@ function TurnView({ turn, head: isHead, onVersion }: { turn: Turn; head: boolean
 			{(turn.reply || live) && <div className="reply">{turn.reply}</div>}
 			{turn.error && <div className="err">{turn.error}</div>}
 			{/* 끝줄 — 이 턴이 남긴 판(지금 판은 채움) · 고친 쪽. 도는 중이면 뛰는 점과 지금 하는 일 */}
-			{(live || turn.version || changed || turn.status === "stopped" || turn.phase) && (
+			{(live || turn.version || changed || turn.status === "stopped" || turn.phase || turn.session) && (
 				<div className="foot" title={detail}>
 					{live && <span className="run" aria-label={t("working")} />}
 					{turn.version && <button className={"node" + (isHead ? " head" : "")} onClick={onVersion} title={`${turn.version.short}${turn.cost != null ? ` · $${turn.cost.toFixed(3)}` : ""}`}>v{turn.version.n}</button>}
+					{turn.session && <span className="more" title={t("sessionHint")}>{t("sessionN").replace("{n}", turn.session.slice(1))}</span>}
 					{turn.phase && <span className="phase">{turn.phase}</span>}
 					{changed && <span className="lbl">{t("changedSlides")}</span>}
 					{touched.map((no) => <button key={no} className="mention" onClick={() => setCurrent(no - 1)}>{no}{t("slideN") === "쪽" ? "쪽" : ""}</button>)}
@@ -270,6 +275,9 @@ function Composer() {
 	const insertReq = useDeck((s) => s.insertReq);
 	const rev = useDeck((s) => s.rev);
 	const [text, setText] = useState("");
+	// 이 기기를 쓰는 팀원 — 정하기 전에는 요청칸 위에 이름 칸이 뜨고 보내기가 막힌다
+	const myName = useSettings((x) => x.s.me).trim();
+	const saveName = (v: string) => { if (v.trim()) useSettings.getState().set((x) => ({ ...x, me: v.trim() })); };
 	// 쪽 목록 · 이어 보기에서 쪽을 끌어 요청칸 위에 올린 동안 — 놓으면 @쪽 이 들어간다
 	const [dropping, setDropping] = useState(false);
 	const mentionSlide = useDeck((s) => s.mentionSlide);
@@ -341,7 +349,7 @@ function Composer() {
 		return () => removeEventListener("keydown", k);
 	}, []);
 
-	const can = !running && (text.trim() || pins.length);
+	const can = !running && !!myName && (text.trim() || pins.length);
 	const go = () => {
 		if (!can) return;
 		send(text, attach);
@@ -371,6 +379,13 @@ function Composer() {
 	);
 	return (
 		<div className="composer">
+			{!myName && (
+				<div className="whoami" title={t("myNameNote")}>
+					<span>{t("myName")}</span>
+					<input className="field" placeholder={t("myNamePh")} aria-label={t("myName")}
+						onBlur={(e) => saveName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveName(e.currentTarget.value); }} />
+				</div>
+			)}
 			{pins.length > 0 && (
 				<div className="tray" aria-label={t("pins")}>
 					{pins.map((p, i) => (
