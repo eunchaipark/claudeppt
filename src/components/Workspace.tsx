@@ -260,7 +260,8 @@ function Rail() {
 	const current = useDeck((s) => s.current);
 	const setCurrent = useDeck((s) => s.setCurrent);
 	const pins = useDeck((s) => s.pins);
-	const turns = useDeck((s) => s.turns);
+	// 마지막 턴의 도구 목록만 — 글자가 흐르는 동안(답만 바뀜) 쪽 목록이 다시 그려지지 않게
+	const lastTools = useDeck((s) => s.turns[s.turns.length - 1]?.tools);
 	const vdiff = useDeck((s) => s.vdiff);
 	const mentionSlide = useDeck((s) => s.mentionSlide);
 	const move = useDeck((s) => s.moveSlide);
@@ -268,7 +269,7 @@ function Rail() {
 	const removeSlide = useDeck((s) => s.removeSlide);
 	const [drag, setDrag] = useState<number | null>(null);
 	const [dropAt, setDropAt] = useState<number | null>(null);
-	const lastFiles = useMemo(() => new Set(turns[turns.length - 1]?.tools.map((x) => x.file).filter(Boolean)), [turns]);
+	const lastFiles = useMemo(() => new Set(lastTools?.map((x) => x.file).filter(Boolean)), [lastTools]);
 	const listRef = useRef<HTMLDivElement>(null);
 	useEffect(() => { listRef.current?.querySelectorAll(".rail-item")[current]?.scrollIntoView({ block: "nearest" }); }, [current]);
 
