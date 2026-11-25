@@ -17,12 +17,13 @@
         "id": "9",
         "title": "[M0] [성능] 떨어진 iframe 창 누수 고치기",
         "description": "unmount 정리 때 contentWindow 가 이미 null 이라 frames Set 에서 지워지지 않고 쌓인다.",
-        "details": "Workspace.tsx:29-32. onLoad 에서 winRef.current=win 으로 잡고 정리에서 frames.delete(winRef.current). closeProject 에서 frames.clear(). 쪽 넘기기 · 핫 리로드 · 썸네일 · @ 미리보기마다 쌓인다. [0.6.0 재검증] 유효. Workspace.tsx:32-35, closeProject(store.ts:408-420)에서 frames 안 비움.",
+        "details": "Workspace.tsx:29-32. onLoad 에서 winRef.current=win 으로 잡고 정리에서 frames.delete(winRef.current). closeProject 에서 frames.clear(). 쪽 넘기기 · 핫 리로드 · 썸네일 · @ 미리보기마다 쌓인다. [0.6.0 재검증] 유효. Workspace.tsx:32-35, closeProject(store.ts:408-420)에서 frames 안 비움.\n\n[완료 23:34] perf/frames-leak → 원본 PR #10 · collab 같은 변경. winRef 로 지우기 + closeProject 에서 frames.clear(). 잰 것: 20번 넘기기 + 다시 그리기 5번에 frames 4→28 (고치기 전) / 3→3 (고친 뒤), 무대 창 등록 유지, 닫으면 0",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:34:23.634Z"
       },
       {
         "id": "10",
@@ -117,9 +118,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:32:04.958Z",
+      "lastModified": "2026-11-25T14:34:23.468Z",
       "taskCount": 10,
-      "completedCount": 3,
+      "completedCount": 4,
       "tags": [
         "master"
       ]
