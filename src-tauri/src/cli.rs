@@ -10,14 +10,12 @@
 //                    웹뷰가 쪽을 그려야 하거나 앱 설정 · 앱이 쥔 상태(핀)를 써야 하는 일이라 실행 중인 앱에 넘긴다 (control.rs → src/lib/remote.ts)
 //   앱 부르기        call — control.json 으로 찾아 붙고, 꺼져 있으면 띄운 뒤 준비될 때까지 기다린다
 //   바깥 작업 알림    touch — 덱을 쓴 명령마다 켜진 앱에 알린다. 앱은 몇 분 동안 그 덱에서 앱 안 Claude 에게 보내기 전에 한 번 묻는다
-//   담당             seats · join · leave · doing — 세션 하나가 담당 하나를 맡는다 (seats.rs). 맡은 세션의 commit 은 맡은 파일만 담고,
-//                    쪽 구성(add · remove · move) · 되돌리기 · 릴리즈는 그 권한이 있어야 한다
 //
 // 출력은 늘 stdout 에 JSON 하나다 — 에이전트가 그대로 읽는다. 실패면 {"ok":false,"error":…} 와 종료 코드 1.
 // 덱을 쓴 명령은 봉투에 "deck"(쓴 덱 폴더)을 단다 — 엉뚱한 덱을 다룬 것을 에이전트가 바로 알아채게.
 // 쪽 번호는 1부터 센다 (deck.json 의 slides 순서). 앱 안의 「@3」 과 같은 번호다.
 
-use crate::{control, project, seats, vcs};
+use crate::{control, project, vcs};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -31,7 +29,6 @@ type R<T> = Result<T, String>;
 const COMMANDS: &[&str] = &[
 	"help", "skill", "paths", "status", "list", "info", "log", "commit", "restore", "pack", "unpack", "add", "remove", "move",
 	"launch", "open", "new", "import", "export", "shot", "inspect", "check", "release", "style", "pins", "gen",
-	"seats", "join", "leave", "doing",
 ];
 
 const HELP: &str = "ClaudePPT CLI — 출력은 JSON 하나. 쪽 번호는 1부터.
@@ -55,17 +52,6 @@ const HELP: &str = "ClaudePPT CLI — 출력은 JSON 하나. 쪽 번호는 1부�
                                      쪽을 더한다 — 빈 쪽(또는 k쪽 사본)을 n번째 자리에(기본 맨 끝). 새 파일 경로를 돌려준다
   remove <n>                         n쪽을 목차에서 뺀다 (파일은 남긴다 — 지난 판 보기가 읽는다)
   move <n> --to <m>                  n쪽을 m번째 자리로 옮긴다
-
-담당 — 한 덱을 여러 세션이 나눠 고칠 때 (세션은 CLAUDE_CODE_SESSION_ID 로 알아본다 · 밖에서는 --session <이름>)
-  seats                              이 덱의 담당 — 번호 · 이름 · 맡은 쪽 · 권한 · 맡은 세션이 있는지 · 지금 하는 일. me 는 이 세션의 담당
-  join [<번호 | 이름>] [--name <이름>] [--take]
-                                     담당을 맡는다. 번호를 안 주면 빈 담당. 담당이 하나도 없으면 모든 권한의 1번을 만든다
-                                     --name 은 그 담당의 이름을 바꾼다. 다른 세션이 맡은 담당은 --take 로만 넘겨받는다
-  leave                              맡은 담당을 내려놓는다
-  doing \"<지금 하는 일>\" [--slides 3,4]
-                                     앱에 보일 지금 하는 일 · 고치는 쪽. doing --done 으로 지운다
-  맡은 뒤에는 commit 이 맡은 파일만 판에 넣고(나머지는 left) 작성자를 담당으로 남긴다.
-  add · remove · move 는 「쪽 구성」, restore · release 는 「덱 관리」 권한이 있어야 한다. pins 는 맡은 쪽 것만 (--all 은 전부)
 
 앱에 넘김 (꺼져 있으면 띄운다)
   status [--wait] [--timeout 600]    앱이 켜져 있는지 · 열린 덱 · 앱 안 Claude 가 일하는 중인지 (이것은 앱을 띄우지 않는다)
@@ -103,12 +89,7 @@ pub fn main(args: Vec<String>) -> i32 {
 	let r = run(cmd, &a);
 	let deck = USED.lock().unwrap().clone();
 	if let Some(d) = &deck {
-		// 맡은 담당이 있으면 마지막 명령 때를 고친다 — 앱의 「담당」 창이 일하는 중인지 이것으로 본다
-		let seat = seats::session(a.get("session")).and_then(|sid| seats::mine(d, &sid));
-		if let Some(x) = &seat {
-			seats::seen(d, x);
-		}
-		touch(d, cmd, seat.as_ref());
+		touch(d, cmd);
 	}
 	let (code, mut out) = match r {
 		Ok(v) => (0, json!({ "ok": true, "data": v })),
@@ -140,10 +121,7 @@ fn run(cmd: &str, a: &Args) -> R<Value> {
 			let dir = deck_own(a)?;
 			let msg = a.get("m").ok_or("-m \"<메시지>\" 가 필요하다")?;
 			guard(&dir, a)?;
-			if let Some(seat) = me(&dir, a)? {
-				return commit_seat(&dir, &seat, msg);
-			}
-			let c = vcs::vcs_commit(s(&dir), msg.into(), None)?;
+			let c = vcs::vcs_commit(s(&dir), msg.into())?;
 			refresh(&dir, "commit");
 			Ok(match c { Some(c) => json!(c), None => json!({ "unchanged": true }) })
 		}
@@ -209,7 +187,6 @@ fn run(cmd: &str, a: &Args) -> R<Value> {
 		}
 		"release" => {
 			let dir = deck_own(a)?;
-			need(&dir, a, "manage", "릴리즈(덱 관리)")?;
 			app_on(&dir)?.call("release", json!({ "dir": dir, "name": a.get("name").unwrap_or(""), "notes": a.get("notes").unwrap_or("") }))
 		}
 		"style" => {
@@ -220,22 +197,11 @@ fn run(cmd: &str, a: &Args) -> R<Value> {
 			Some(done) => {
 				let dir = deck_own(a)?;
 				let nums = if done.trim().eq_ignore_ascii_case("all") { Value::Null } else { nums(done, "--done")? };
-				// 맡은 쪽이 정해진 담당은 그 쪽 핀만 지운다
-				let only = me(&dir, a)?.map(|x| own_ids(&x)).unwrap_or(Value::Null);
-				app()?.call("unpin", json!({ "dir": dir, "nums": nums, "only": only }))
+				app()?.call("unpin", json!({ "dir": dir, "nums": nums }))
 			}
 			None => {
 				let dir = deck_dir(a)?;
-				// 맡은 쪽이 정해진 담당은 그 쪽 핀만 본다 — --slides · --all 로 넓힌다
-				let mut want = slides(a)?;
-				if want.is_null() && !a.has("all") {
-					if let Some(seat) = me(&dir, a)? {
-						if let Some(v) = seats::scope_slides(&seat, &read_deck(&dir)?).as_array() {
-							want = json!(v.iter().map(|x| x["no"].clone()).collect::<Vec<_>>());
-						}
-					}
-				}
-				app()?.call("pins", json!({ "dir": dir, "slides": want, "marks": !a.has("no-marks") }))
+				app()?.call("pins", json!({ "dir": dir, "slides": slides(a)?, "marks": !a.has("no-marks") }))
 			}
 		},
 		"gen" => {
@@ -243,24 +209,6 @@ fn run(cmd: &str, a: &Args) -> R<Value> {
 			guard(&dir, a)?;
 			app_on(&dir)?.call("gen", json!({ "dir": dir }))
 		}
-		"seats" => {
-			let dir = deck_dir(a)?;
-			Ok(seats::seats_cmd(&dir, &read_deck(&dir)?, seats::session(a.get("session")).as_deref()))
-		}
-		"join" => {
-			let dir = deck_own(a)?;
-			let sid = sid(a)?;
-			let r = seats::join(&dir, &read_deck(&dir)?, &sid, a.pos(0), a.get("name"), a.has("take"))?;
-			refresh(&dir, "join");
-			Ok(r)
-		}
-		"leave" => {
-			let dir = deck_own(a)?;
-			let r = seats::leave(&dir, &sid(a)?)?;
-			refresh(&dir, "leave");
-			Ok(r)
-		}
-		"doing" => doing(&deck_own(a)?, a),
 		_ => Err(format!("모르는 명령: {cmd} — 쓸 수 있는 명령: {} (help 로 자세히)", COMMANDS.join(" "))),
 	}
 }
@@ -273,7 +221,7 @@ struct Args {
 }
 
 /// 값을 받는 선택지. 나머지 --이름 은 켜고 끄기다
-const VALUED: &[&str] = &["deck", "m", "message", "n", "out", "slides", "slide", "scale", "name", "notes", "to", "template", "at", "title", "copy", "done", "timeout", "seat", "session"];
+const VALUED: &[&str] = &["deck", "m", "message", "n", "out", "slides", "slide", "scale", "name", "notes", "to", "template", "at", "title", "copy", "done", "timeout"];
 
 impl Args {
 	fn parse(raw: &[String]) -> Args {
@@ -543,16 +491,12 @@ fn info(dir: &Path) -> R<Value> {
 		"version": head,
 		"releases": releases,
 		"pins": pins,
-		// 담당 — 이 세션이 맡은 담당(me)과 담당 수. 자세한 것은 seats
-		"me": seats::session(None).and_then(|sid| seats::mine(dir, &sid)).map(|x| json!({ "no": seats::no(&x), "label": seats::label(&x), "rules": seats::rules(&x, &deck) })),
-		"seats": seats::list(dir).len(),
 	}))
 }
 
 fn restore(dir: &Path, a: &Args) -> R<Value> {
 	let want = a.pos(0).ok_or("되돌릴 판(v3 · 3 · 커밋)이 필요하다")?;
 	guard(dir, a)?;
-	need(dir, a, "manage", "되돌리기(덱 관리)")?;
 	let log = vcs::vcs_log(s(dir), None)?;
 	let log = json!(log);
 	let n = want.trim_start_matches(['v', 'V']).parse::<u64>().ok();
@@ -595,7 +539,6 @@ fn new_id(dir: &Path) -> String {
 
 fn add(dir: &Path, a: &Args) -> R<Value> {
 	guard(dir, a)?;
-	let seat = need(dir, a, "order", "쪽 구성")?;
 	let mut deck = read_deck(dir)?;
 	let n = slide_list(&mut deck)?.len();
 	let at = if a.has("at") { a.num(Err("at"), "--at")?.min(n + 1) } else { n + 1 };
@@ -622,16 +565,11 @@ fn add(dir: &Path, a: &Args) -> R<Value> {
 	std::fs::write(dir.join(&file), html).map_err(|e| e.to_string())?;
 	slide_list(&mut deck)?.insert(at - 1, entry.clone());
 	write_deck(dir, &mut deck)?;
-	if let Some(x) = &seat {
-		seats::adopt(dir, x, &id);
-		seats::log(dir, seats::no(x), "add", &format!("{at}쪽 더함"));
-	}
 	Ok(json!({ "no": at, "id": id, "file": file, "path": dir.join("slides").join(format!("{id}.html")), "title": entry["title"], "slides": n + 1 }))
 }
 
 fn remove(dir: &Path, a: &Args) -> R<Value> {
 	guard(dir, a)?;
-	need(dir, a, "order", "쪽 구성")?;
 	let k = a.num(Ok(0), "뺄 쪽 번호")?;
 	let mut deck = read_deck(dir)?;
 	let list = slide_list(&mut deck)?;
@@ -649,7 +587,6 @@ fn remove(dir: &Path, a: &Args) -> R<Value> {
 
 fn move_slide(dir: &Path, a: &Args) -> R<Value> {
 	guard(dir, a)?;
-	need(dir, a, "order", "쪽 구성")?;
 	let from = a.num(Ok(0), "옮길 쪽 번호")?;
 	let to = a.num(Err("to"), "--to")?;
 	let mut deck = read_deck(dir)?;
@@ -690,87 +627,10 @@ fn refresh(dir: &Path, why: &str) {
 
 /// 바깥에서 이 덱을 다루고 있다고 켜진 앱에 알린다 (앱을 띄우지는 않는다). 앱은 몇 분 동안 그 덱에서 앱 안 Claude 에게 보내기 전에 한 번 묻는다 —
 /// 바깥 Claude 가 고치는 파일과 앱 안 Claude 의 턴이 한 판에 섞이지 않게
-fn touch(dir: &Path, cmd: &str, seat: Option<&Value>) {
+fn touch(dir: &Path, cmd: &str) {
 	if let Some(c) = connect().filter(|c| c.enabled) {
-		let _ = c.call("touch", json!({ "dir": dir, "cmd": cmd, "seat": seat.map(seats::no), "label": seat.map(seats::label) }));
+		let _ = c.call("touch", json!({ "dir": dir, "cmd": cmd }));
 	}
-}
-
-// ── 담당 ──
-
-/// 이 명령을 부른 세션이 맡은 담당. --seat 로 줄 수도 있다 (Claude Code 밖에서 부를 때)
-fn me(dir: &Path, a: &Args) -> R<Option<Value>> {
-	if let Some(k) = a.get("seat") {
-		return seats::find(&seats::list(dir), k).map(Some).ok_or(format!("없는 담당: {k}"));
-	}
-	Ok(seats::session(a.get("session")).and_then(|sid| seats::mine(dir, &sid)))
-}
-
-/// 맡은 담당이 있으면 그 권한을 본다. 담당 없이 부르면(혼자 쓰는 길) 그대로 둔다
-fn need(dir: &Path, a: &Args, k: &str, what: &str) -> R<Option<Value>> {
-	let m = me(dir, a)?;
-	if let Some(x) = &m {
-		if !seats::flag(x, k) {
-			return Err(format!("{what} 권한이 없는 담당이다: {} — 사용자가 앱의 「담당」에서 준다", seats::label(x)));
-		}
-	}
-	Ok(m)
-}
-
-fn sid(a: &Args) -> R<String> {
-	seats::session(a.get("session")).ok_or("어느 세션인지 모른다 — Claude Code 의 Bash 에서 부르거나 --session <이름> 을 준다".into())
-}
-
-/// 맡은 쪽 id — 「모든 쪽」이면 null
-fn own_ids(seat: &Value) -> Value {
-	if seat["slides"].is_array() { seat["slides"].clone() } else { Value::Null }
-}
-
-/// 담당의 판 — 맡은 파일만 담고 작성자를 담당으로. 맡지 않은 바뀐 파일은 left 로 돌려준다 (다른 담당이 고치는 중일 수도 있다)
-fn commit_seat(dir: &Path, seat: &Value, msg: &str) -> R<Value> {
-	let deck = read_deck(dir)?;
-	let (mine, left): (Vec<String>, Vec<String>) = vcs::changed(dir)?.into_iter().partition(|p| seats::allows(seat, &deck, p));
-	let label = seats::label(seat);
-	let c = if mine.is_empty() { None } else { vcs::commit_only(dir, msg, &mine, (&label, &format!("seat-{}@claudeppt", seats::no(seat))))? };
-	let mut out = match &c {
-		Some(c) => json!(c),
-		None => json!({ "unchanged": true }),
-	};
-	if let Some(n) = out["n"].as_u64() {
-		seats::log(dir, seats::no(seat), "commit", &format!("v{n} {msg}"));
-	}
-	out["files"] = json!(mine);
-	if !left.is_empty() {
-		out["left"] = json!(left);
-		out["note"] = json!(format!("맡지 않은 파일이라 판에 넣지 않았다 ({label}). 네가 고친 것이면 원래대로 되돌린다 — 다른 담당이 고치는 중일 수도 있으니 지우지는 않는다"));
-	}
-	refresh(dir, "commit");
-	Ok(out)
-}
-
-/// 지금 하는 일 — 고치는 쪽은 맡은 쪽이어야 한다
-fn doing(dir: &Path, a: &Args) -> R<Value> {
-	let seat = me(dir, a)?.ok_or("맡은 담당이 없다 — join 부터 한다")?;
-	let deck = read_deck(dir)?;
-	let done = a.has("done");
-	let text = Some(a.pos.join(" ")).filter(|x| !x.trim().is_empty());
-	if text.is_none() && !done {
-		return Err("지금 하는 일을 한 줄로 준다 — doing \"3쪽 표 정리\" (지울 때는 doing --done)".into());
-	}
-	let mut ids = vec![];
-	if let Some(v) = slides(a)?.as_array() {
-		let list = deck["slides"].as_array().cloned().unwrap_or_default();
-		for n in v.iter().filter_map(Value::as_u64) {
-			let x = (n as usize).checked_sub(1).and_then(|i| list.get(i)).ok_or(format!("없는 쪽: {n} (이 덱은 {}쪽)", list.len()))?;
-			if !seats::allows(&seat, &deck, x["file"].as_str().unwrap_or("")) {
-				return Err(format!("{n}쪽은 맡은 쪽이 아니다 ({}) — 사용자에게 범위를 넓혀 달라고 한다", seats::label(&seat)));
-			}
-			ids.push(x["id"].as_str().unwrap_or("").to_string());
-		}
-	}
-	let r = seats::doing(dir, &seat, if done { None } else { text.as_deref() }, ids)?;
-	refresh(dir, "doing");
-	Ok(r)
 }
 
 /// status — 앱을 띄우지 않는다. --wait 면 앱 안 Claude 가 끝날 때까지(기본 600초) 기다린다

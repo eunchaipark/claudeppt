@@ -67,24 +67,18 @@ pub struct Commit {
 	date: String,
 	subject: String,
 	tags: Vec<String>,
-	/// 남긴 이 — 앱이 남긴 판은 ClaudePPT, 담당이 남긴 판은 그 담당 이름 (seats.rs)
-	author: String,
-	/// 담당이 남긴 판이면 그 번호 — 작성자 메일(seat-<n>@claudeppt)에서 읽는다
-	seat: Option<u32>,
 }
 
 /// 바뀐 것이 있으면 한 판으로 남기고 그 판을 돌려준다. 없으면 None.
-/// exclude — 판에 넣지 않을 파일. 담당이 「지금 고치는 중」이라고 알린 쪽은 앱의 판(대화 턴 · 직접 편집)에 섞지 않는다
 #[tauri::command]
-pub fn vcs_commit(dir: String, message: String, exclude: Option<Vec<String>>) -> Res<Option<Commit>> {
+pub fn vcs_commit(dir: String, message: String) -> Res<Option<Commit>> {
 	vcs_init(dir.clone())?;
 	let _l = lock(Path::new(&dir))?;
-	commit_all(Path::new(&dir), &message, exclude)
+	commit_all(Path::new(&dir), &message)
 }
 
-/// 판 남기기 잠금 — 담당 세션 여럿(CLI 프로세스 각각)과 앱이 덱 하나의 git 색인을 함께 쓴다.
-/// 잠그지 않으면 한 담당이 맡은 파일을 올린 사이 다른 담당이 색인을 비우고 제 파일을 올려, 남의 파일이 내 이름의 판으로 남는다.
-/// 2026.11.25 : 두 세션이 동시에 commit 하는 시험에서 찾았다
+/// 판 남기기 잠금 — 앱과 앱 밖 CLI(Claude Code 세션마다 프로세스가 따로 돈다)가 덱 하나의 git 색인을 함께 쓴다.
+/// 잠그지 않으면 같은 때 판을 남길 때 한쪽이 git 의 index.lock 에 걸려 실패하고, 되돌리기(남기기 → 덮기 → 남기기) 사이에 다른 판이 끼어든다
 struct Lock(PathBuf);
 
 impl Drop for Lock {
@@ -115,59 +109,14 @@ fn lock(d: &Path) -> Res<Lock> {
 	}
 }
 
-fn commit_all(d: &Path, message: &str, exclude: Option<Vec<String>>) -> Res<Option<Commit>> {
+fn commit_all(d: &Path, message: &str) -> Res<Option<Commit>> {
 	run(d, &["add", "-A"])?;
-	for x in exclude.unwrap_or_default() {
-		let _ = run(d, &["reset", "-q", "--", &x]);
-	}
-	finish(d, message, None)
-}
-
-/// 담당의 판 — only 에 든 파일만 넣고 작성자를 담당으로 남긴다. 다른 담당이 고치는 중인 파일이 섞이지 않게
-pub fn commit_only(dir: &Path, message: &str, only: &[String], author: (&str, &str)) -> Res<Option<Commit>> {
-	vcs_init(dir.to_string_lossy().into())?;
-	let _l = lock(dir)?;
-	// 색인을 비우고 맡은 파일만 올린다 — 작업 파일은 건드리지 않는다
-	if run(dir, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok() {
-		run(dir, &["reset", "-q"])?;
-	}
-	for x in only {
-		run(dir, &["add", "-A", "--", x])?;
-	}
-	finish(dir, message, Some(author))
-}
-
-/// 바뀐 파일 — 덱 폴더 기준 상대 경로 (지운 파일 포함)
-pub fn changed(dir: &Path) -> Res<Vec<String>> {
-	let out = run(dir, &["status", "--porcelain", "-uall", "-z"])?;
-	let mut v = vec![];
-	let mut it = out.split('\0').filter(|x| x.len() > 3);
-	while let Some(e) = it.next() {
-		// 옮긴 파일은 「새 이름\0옛 이름」 — 옛 이름도 바뀐 파일이다
-		if e.starts_with('R') || e.as_bytes().get(1) == Some(&b'R') {
-			v.push(e[3..].to_string());
-			if let Some(old) = it.next() {
-				v.push(old.to_string());
-			}
-		} else {
-			v.push(e[3..].to_string());
-		}
-	}
-	Ok(v)
-}
-
-fn finish(d: &Path, message: &str, author: Option<(&str, &str)>) -> Res<Option<Commit>> {
 	let changed = !git(d).args(["diff", "--cached", "--quiet"]).status().map_err(err)?.success();
 	let first = run(d, &["rev-parse", "--verify", "-q", "HEAD"]).is_err();
 	if !changed && !first {
 		return Ok(None);
 	}
-	let by = author.map(|(n, m)| format!("--author={n} <{m}>"));
-	let mut args = vec!["commit", "-q", "--allow-empty", "-m", message];
-	if let Some(b) = &by {
-		args.push(b);
-	}
-	run(d, &args)?;
+	run(d, &["commit", "-q", "--allow-empty", "-m", message])?;
 	Ok(head(d).ok())
 }
 
@@ -190,7 +139,7 @@ pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 			}
 		}
 	}
-	let mut args = vec!["log".to_string(), "--format=%H%x09%h%x09%ci%x09%an%x09%ae%x09%s".to_string()];
+	let mut args = vec!["log".to_string(), "--format=%H%x09%h%x09%ci%x09%s".to_string()];
 	if let Some(l) = limit {
 		args.push(format!("-{l}"));
 	}
@@ -200,18 +149,12 @@ pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 		.lines()
 		.enumerate()
 		.filter_map(|(i, l)| {
-			let mut p = l.splitn(6, '\t');
+			let mut p = l.splitn(4, '\t');
 			let hash = p.next()?.to_string();
-			let short = p.next()?.to_string();
-			let date = p.next()?.get(..16)?.to_string();
-			let author = p.next()?.to_string();
-			let seat = p.next()?.strip_prefix("seat-").and_then(|m| m.split('@').next()).and_then(|n| n.parse().ok());
 			Some(Commit {
 				n: total - i as u32,
-				short,
-				date,
-				author,
-				seat,
+				short: p.next()?.to_string(),
+				date: p.next()?.get(..16)?.to_string(),
 				subject: p.next().unwrap_or("").to_string(),
 				tags: tags.remove(&hash).unwrap_or_default(),
 				hash,
@@ -234,12 +177,12 @@ pub fn vcs_restore(dir: String, hash: String, message: String) -> Res<Option<Com
 	let d = Path::new(&dir);
 	vcs_init(dir.clone())?;
 	let _l = lock(d)?;
-	commit_all(d, "되돌리기 전 변경을 남긴다", None)?;
+	commit_all(d, "되돌리기 전 변경을 남긴다")?;
 	let keep = |p: &str| p.starts_with("releases/") || p.starts_with("source/");
 	let added = run(d, &["diff", "--name-only", "--diff-filter=A", &hash, "HEAD"])?;
 	for rel in added.lines().filter(|l| !l.is_empty() && !keep(l)) {
 		let _ = std::fs::remove_file(d.join(rel));
 	}
 	run(d, &["checkout", &hash, "--", ".", ":(exclude)releases", ":(exclude)source"])?;
-	commit_all(d, &message, None)
+	commit_all(d, &message)
 }

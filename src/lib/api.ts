@@ -1,9 +1,7 @@
 // 백엔드(src-tauri) 명령을 부르는 얇은 층. 이름은 Rust 명령과 같다.
 import { invoke } from "@tauri-apps/api/core";
-import type { Seat } from "./seats";
 
-/** author — 남긴 이(앱은 ClaudePPT) · seat — 담당이 남긴 판이면 그 번호 (seats.ts) */
-export interface Commit { n: number; hash: string; short: string; date: string; subject: string; tags: string[]; author: string; seat: number | null }
+export interface Commit { n: number; hash: string; short: string; date: string; subject: string; tags: string[] }
 export interface LibItem { dir: string; deck: any; modified: number }
 /** 설정 「바깥 연결」 — 통로 · 최근 바깥 명령 · 스킬 상태 (control.rs remote_info) */
 export interface RemoteInfo {
@@ -18,20 +16,14 @@ export interface Tool { name: string; path: string | null; version: string }
 /** metrics = [winAscent, winDescent, typoAscender, typoDescender, typoLineGap] (em 비율) · typo = USE_TYPO_METRICS */
 export interface FontFace { file: string; family: string[]; full: string[]; local: string; bold: boolean; italic: boolean; weight: number; metrics: number[]; typo: boolean }
 
-/** 앱이 마지막으로 덱 파일을 쓴 때 — 폴더 감시가 잡은 변경이 앱이 쓴 것인지, 밖(담당 세션)이 쓴 것인지 가른다 (store.ts attribute) */
-let wroteAt = 0;
-export const localWriteAt = () => wroteAt;
-export const noteLocalWrite = () => { wroteAt = Date.now(); };
-const wrote = <T,>(p: Promise<T>) => { wroteAt = Date.now(); return p.finally(() => { wroteAt = Date.now(); }); };
-
 export const api = {
 	readText: (root: string, rel: string) => invoke<string>("fs_read_text", { root, rel }),
 	clipText: () => invoke<string>("clip_text"),
-	writeText: (root: string, rel: string, text: string) => wrote(invoke<void>("fs_write_text", { root, rel, text })),
-	writeB64: (root: string, rel: string, data: string) => wrote(invoke<void>("fs_write_base64", { root, rel, data })),
+	writeText: (root: string, rel: string, text: string) => invoke<void>("fs_write_text", { root, rel, text }),
+	writeB64: (root: string, rel: string, data: string) => invoke<void>("fs_write_base64", { root, rel, data }),
 	exists: (root: string, rel: string) => invoke<boolean>("fs_exists", { root, rel }),
 	/** 큰 파일은 base64 를 거치지 않고 날바이트로 — 그림 · 동영상 · 원본 PPTX */
-	writeBytes: (root: string, rel: string, data: Uint8Array) => wrote(invoke<void>("fs_write_bytes", data, { headers: { "x-root": encodeURIComponent(root), "x-rel": encodeURIComponent(rel) } })),
+	writeBytes: (root: string, rel: string, data: Uint8Array) => invoke<void>("fs_write_bytes", data, { headers: { "x-root": encodeURIComponent(root), "x-rel": encodeURIComponent(rel) } }),
 	absReadBytes: (path: string) => invoke<ArrayBuffer>("abs_read_bytes", { path }),
 	absWriteBytes: (path: string, data: Uint8Array) => invoke<void>("abs_write_bytes", data, { headers: { "x-path": encodeURIComponent(path) } }),
 	absCopyIn:(src: string, root: string, rel: string) => invoke<void>("abs_copy_in", { src, root, rel }),
@@ -47,14 +39,10 @@ export const api = {
 	reveal: (path: string) => invoke<void>("reveal", { path }),
 
 	vcsInit: (dir: string) => invoke<void>("vcs_init", { dir }),
-	/** exclude — 판에 넣지 않을 파일 (담당이 고치는 중이라고 알린 쪽) */
-	commit: (dir: string, message: string, exclude?: string[]) => invoke<Commit | null>("vcs_commit", { dir, message, exclude: exclude?.length ? exclude : null }),
+	commit: (dir: string, message: string) => invoke<Commit | null>("vcs_commit", { dir, message }),
 	log: (dir: string, limit?: number) => invoke<Commit[]>("vcs_log", { dir, limit }),
 	tag: (dir: string, name: string) => invoke<void>("vcs_tag", { dir, name }),
-	restore: (dir: string, hash: string, message: string) => wrote(invoke<Commit | null>("vcs_restore", { dir, hash, message })),
-	/** 「담당」 창이 고친 것을 파일에 합친다 — 바깥 세션과 같은 잠금 안에서, 화면이 바꾼 칸만 (seats.rs update) */
-	seatsUpdate: (dir: string, before: Seat[], after: Seat[]) => invoke<Seat[]>("seats_update", { dir, before, after }),
-	seatsVacate: (dir: string, seat: number) => invoke<void>("seats_vacate", { dir, seat }),
+	restore: (dir: string, hash: string, message: string) => invoke<Commit | null>("vcs_restore", { dir, hash, message }),
 
 	claudeDetect: (path: string) => invoke<{ path: string; version: string } | null>("claude_detect", { path }),
 	claudeRun: (spec: { turn: string; dir: string; prompt: string; system: string; claudePath: string; model: string; effort: string; resume?: string | null; mode?: "fonts" }) => invoke<{ code: number; stderr: string }>("claude_run", { spec }),

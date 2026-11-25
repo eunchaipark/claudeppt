@@ -15,7 +15,6 @@ mod imagegen;
 mod metafile;
 mod project;
 mod pptsnap;
-mod seats;
 mod vcs;
 mod watch;
 
@@ -80,8 +79,6 @@ pub fn run() {
 			vcs::vcs_log,
 			vcs::vcs_tag,
 			vcs::vcs_restore,
-			seats::seats_update,
-			seats::seats_vacate,
 			claude::claude_detect,
 			claude::claude_run,
 			claude::claude_stop,
