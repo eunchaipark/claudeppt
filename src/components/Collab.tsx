@@ -1,6 +1,6 @@
 // 팀 협업 화면 조각 — 제목 줄 접속 칩 · 「설정 › 협업」 칸 · 쪽 목록 · 무대의 「보는 사람」 표시 (상태: lib/collab.ts)
 import { useEffect, useRef, useState } from "react";
-import { collabKick, collabLinkNew, collabLinkRemove, collabLock, type InviteLink, type Member, startHost, stopHost, useCollab } from "../lib/collab";
+import { collabKick, collabLinkNew, collabLinkRemove, collabLock, collabTools, collabTunnel, type InviteLink, type TunnelTools, type Member, startHost, stopHost, useCollab } from "../lib/collab";
 import { useT } from "../lib/i18n";
 import { useDeck } from "../lib/store";
 import { remote } from "../lib/transport";
@@ -87,7 +87,7 @@ export function CollabChip() {
 		<span className="collabwrap" ref={ref}>
 			<button className={"tb-btn collab-chip" + (off ? " off" : "")} onClick={() => setOpen(!open)} aria-expanded={open} title={t("collabMembers")}>
 				<span className="dot" aria-hidden />
-				{off ? (kicked ? t("collabKicked") : ended ? t("collabEnded") : t("collabOffline")) : t("collabCount").replace("{n}", String(members.length))}
+				{off ? (kicked ? t("collabKicked") : ended ? t("collabEnded") : t("collabOffline")) : (info?.tunnel ? t("collabOpenOutside") + " · " : "") + t("collabCount").replace("{n}", String(members.length))}
 			</button>
 			{open && (
 				<div className="pop collab-pop" role="dialog" aria-label={t("collabMembers")}>
@@ -118,6 +118,8 @@ export function CollabSettings() {
 	const [busy, setBusy] = useState(false);
 	const [who, setWho] = useState("");
 	const [hours, setHours] = useState(0);
+	const [tools, setTools] = useState<TunnelTools | null>(null);
+	useEffect(() => { if (info) collabTools().then(setTools, () => {}); }, [!!info]);
 	const run = async (f: () => Promise<unknown>) => {
 		setBusy(true);
 		try { await f(); } catch (e) { notify(String(e), "err"); } finally { setBusy(false); }
@@ -134,6 +136,24 @@ export function CollabSettings() {
 			{info && (
 				<>
 					<p className="note">{t("collabFirewall")}</p>
+					<section className="collab-sec">
+						<span className="lbl">{t("collabOutside")}</span>
+						{info.tunnel ? (
+							<div className="field-row">
+								<span className="tun on">{info.tunnel.kind === "tailscale" ? "Tailscale Funnel" : "Cloudflare"}</span>
+								<input className="field mono" readOnly value={info.tunnel.url} aria-label={t("collabOutside")} />
+								<button disabled={busy} onClick={() => run(() => collabTunnel(false))}>{t("collabTunnelOff")}</button>
+							</div>
+						) : tools && (tools.tailscale || tools.cloudflared) ? (
+							<div className="field-row">
+								<span className="tun">{t("collabTunnelClosed")}</span>
+								<button disabled={busy} onClick={() => run(() => collabTunnel(true))}>{t("collabTunnelOn")}</button>
+							</div>
+						) : (
+							<p className="note">{t("collabNoTools")}</p>
+						)}
+						<p className="note">{info.tunnel?.kind === "cloudflare" ? t("collabCloudflareNote") : info.tunnel ? t("collabTunnelNote") : t("collabLanOnly")}</p>
+					</section>
 					<section className="collab-sec">
 						<span className="lbl">{t("collabLinks")}</span>
 						{info.links.map((l) => (

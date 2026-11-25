@@ -56,6 +56,9 @@ pub struct Hub {
 	app: AppHandle,
 	book: Mutex<Book>,
 	book_path: PathBuf,
+	/// 바깥 길(터널) — 열려 있으면 그 주소가 링크의 첫 주소가 된다
+	tunnel: tokio::sync::Mutex<Option<crate::tunnel::Tunnel>>,
+	public: Mutex<Option<(String, &'static str)>>,
 	/// 연결 → (기기 id, 그 연결에 보내는 길) — 내보낼 때 끊는다
 	conns: Mutex<HashMap<u64, (String, mpsc::UnboundedSender<String>)>>,
 	/// 슬라이드 주소 안의 열쇠 — 열린 덱 파일 읽기만 된다
@@ -91,12 +94,20 @@ pub struct Member {
 #[derive(Serialize, Clone)]
 pub struct Info {
 	port: u16,
-	/// 이 서버에 닿는 주소들 — 사무실 망 · 이 PC (바깥 길은 C2 다음 작업)
+	/// 이 서버에 닿는 주소들 — 바깥 길(있으면 맨 앞) · 사무실 망 · 이 PC
 	bases: Vec<String>,
+	/// 바깥 길 — { url, kind: "tailscale" | "cloudflare" }
+	tunnel: Option<TunnelView>,
 	links: Vec<LinkView>,
 	devices: Vec<DeviceView>,
 	locked: bool,
 	members: Vec<Member>,
+}
+
+#[derive(Serialize, Clone)]
+struct TunnelView {
+	url: String,
+	kind: &'static str,
 }
 
 #[derive(Serialize, Clone)]
@@ -144,6 +155,10 @@ fn lan_ip() -> Option<String> {
 impl Hub {
 	fn info(&self) -> Info {
 		let mut bases = vec![];
+		let public = self.public.lock().unwrap().clone();
+		if let Some((u, _)) = &public {
+			bases.push(u.clone());
+		}
 		if let Some(ip) = lan_ip() {
 			bases.push(format!("http://{ip}:{}", self.port));
 		}
@@ -156,6 +171,7 @@ impl Hub {
 			links: b.links.iter().map(|l| LinkView { id: l.id.clone(), url: format!("{}/j/{}", bases[0], l.token), name: l.name.clone(), expires: l.expires, expired: l.expires.is_some_and(|e| e <= t) }).collect(),
 			devices: b.devices.iter().rev().map(|d| DeviceView { id: d.id.clone(), name: d.name.clone(), seen: d.seen, online: members.iter().any(|m| m.device == d.id) }).collect(),
 			locked: b.locked,
+			tunnel: public.map(|(url, kind)| TunnelView { url, kind }),
 			bases,
 			members,
 		}
@@ -241,6 +257,8 @@ pub async fn collab_start(app: AppHandle) -> Res<Info> {
 			b
 		}),
 		book_path: book_file(),
+		tunnel: tokio::sync::Mutex::new(None),
+		public: Mutex::new(None),
 		conns: Mutex::new(HashMap::new()),
 		deck_key: uuid::Uuid::new_v4().simple().to_string(),
 		port,
@@ -309,6 +327,31 @@ pub fn collab_lock(app: AppHandle, on: bool) -> Res<Info> {
 	})
 }
 
+/// 바깥 길을 열거나 닫는다 — 깔린 Tailscale(Funnel) · cloudflared 를 쓴다 (tunnel.rs)
+#[tauri::command]
+pub async fn collab_tunnel(app: AppHandle, on: bool) -> Res<Info> {
+	let h = hub(&app).ok_or("협업이 꺼져 있다")?;
+	let mut slot = h.tunnel.lock().await;
+	if let Some(t) = slot.take() {
+		crate::tunnel::stop(t).await;
+	}
+	*h.public.lock().unwrap() = None;
+	if on {
+		let t = crate::tunnel::start(h.port).await?;
+		*h.public.lock().unwrap() = Some((t.url.clone(), t.kind));
+		*slot = Some(t);
+	}
+	drop(slot);
+	let _ = h.app.emit("collab-info", h.info());
+	Ok(h.info())
+}
+
+/// 바깥 길에 쓸 수 있는 도구 — 화면이 안내 글을 고른다
+#[tauri::command]
+pub async fn collab_tools() -> crate::tunnel::Tools {
+	tokio::task::spawn_blocking(crate::tunnel::detect).await.unwrap_or(crate::tunnel::Tools { tailscale: None, cloudflared: None })
+}
+
 /// 연결 안에서만 쓰는 「끊어라」 표시 — 서버가 보내는 말과 겹치지 않는 글
 const CLOSE: &str = "\u{0}close";
 
@@ -325,6 +368,12 @@ pub fn collab_stop(state: State<Collab>) {
 		for (_, tx) in h.conns.lock().unwrap().values() {
 			let _ = tx.send(CLOSE.into());
 		}
+		let h2 = h.clone();
+		tauri::async_runtime::spawn(async move {
+			if let Some(t) = h2.tunnel.lock().await.take() {
+				crate::tunnel::stop(t).await;
+			}
+		});
 		for (_, tx) in h.pending.lock().unwrap().drain() {
 			let _ = tx.send(json!({ "ok": false, "error": "stopped" }));
 		}
@@ -391,7 +440,8 @@ async fn auth(Ax(h): Ax<Arc<Hub>>, mut req: Request, next: Next) -> Response {
 	if path.starts_with("/_/d/") || path == "/__rt.js" || path.starts_with("/j/") {
 		return next.run(req).await;
 	}
-	if (path == "/_/ws" || path == "/_/rpc") && !same_origin(req.headers()) {
+	let public = h.public.lock().unwrap().as_ref().map(|(u, _)| u.clone());
+	if (path == "/_/ws" || path == "/_/rpc") && !same_origin(req.headers(), public.as_deref()) {
 		return StatusCode::FORBIDDEN.into_response();
 	}
 	let who = cookie_of(req.headers()).and_then(|c| h.book.lock().unwrap().device(&c, now())).map(|d| Who { device: d.id, name: d.name });
@@ -481,8 +531,12 @@ const DENIED: &str = "<!doctype html><meta charset=utf-8><title>ClaudePPT</title
 
 /// 요청을 보낸 페이지가 이 서버에서 온 것인가 — Origin 의 호스트:포트가 Host 와 같아야 한다.
 /// 브라우저는 WebSocket 연결과 POST fetch 에 늘 Origin 을 붙인다. sandbox 슬라이드는 「null」이라 걸린다
-fn same_origin(headers: &HeaderMap) -> bool {
+/// 바깥 길로 온 요청은 터널이 Host 를 127.0.0.1 로 바꿔 보낼 수 있다 — 그래서 바깥 길 주소(public)와 같은 Origin 도 받는다
+fn same_origin(headers: &HeaderMap, public: Option<&str>) -> bool {
 	let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else { return false };
+	if public.is_some_and(|p| p.trim_end_matches('/').eq_ignore_ascii_case(origin)) {
+		return true;
+	}
 	let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else { return false };
 	origin.split_once("://").is_some_and(|(_, h)| h.eq_ignore_ascii_case(host))
 }
@@ -706,7 +760,7 @@ mod tests {
 				m.insert(header::ORIGIN, HeaderValue::from_static(o));
 			}
 			m.insert(header::HOST, HeaderValue::from_static(host));
-			same_origin(&m)
+			same_origin(&m, None)
 		};
 		assert!(h(Some("http://10.0.0.5:47815"), "10.0.0.5:47815"));
 		assert!(h(Some("https://abc.ts.net"), "abc.ts.net"));
@@ -714,6 +768,13 @@ mod tests {
 		assert!(!h(Some("null"), "10.0.0.5:47815"), "sandbox 슬라이드");
 		assert!(!h(Some("https://evil.example"), "10.0.0.5:47815"));
 		assert!(!h(None, "10.0.0.5:47815"));
+		// 바깥 길: Host 가 127.0.0.1 로 바뀌어 와도 터널 주소와 같은 Origin 은 받는다
+		let mut m = HeaderMap::new();
+		m.insert(header::ORIGIN, HeaderValue::from_static("https://plain-dog.trycloudflare.com"));
+		m.insert(header::HOST, HeaderValue::from_static("127.0.0.1:47815"));
+		assert!(same_origin(&m, Some("https://plain-dog.trycloudflare.com")));
+		assert!(!same_origin(&m, Some("https://other.trycloudflare.com")));
+		assert!(!same_origin(&m, None));
 	}
 
 	#[test]

@@ -628,3 +628,5 @@ textarea.field { height: auto; padding: 8px 10px; line-height: 1.5; resize: vert
 .collab-members .nm { flex: 1; min-width: 0; }
 .collab-members .st { font-size: 11px; color: var(--faint); }
 .collab-members .st.on { color: var(--ok); }
+.collab-set .tun { font-size: 12px; color: var(--faint); white-space: nowrap; }
+.collab-set .tun.on { color: var(--ok); }

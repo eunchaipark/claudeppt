@@ -19,6 +19,7 @@ mod metafile;
 mod project;
 mod pptsnap;
 mod vcs;
+mod tunnel;
 mod watch;
 
 use std::collections::HashMap;
@@ -107,6 +108,8 @@ pub fn run() {
 			collab::collab_link_remove,
 			collab::collab_kick,
 			collab::collab_lock,
+			collab::collab_tunnel,
+			collab::collab_tools,
 		])
 		.build(tauri::generate_context!())
 		.expect("앱을 띄우지 못했다")

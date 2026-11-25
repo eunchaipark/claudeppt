@@ -16,7 +16,8 @@ export interface Member { conn: number; device: string; name: string; slide: str
 export interface InviteLink { id: string; url: string; name: string | null; expires: number | null; expired: boolean }
 export interface Device { id: string; name: string; seen: number; online: boolean }
 /** 서버 정보 — bases: 이 서버에 닿는 주소 · links: 초대 링크 · devices: 링크로 들어온 기기 · locked: 회의 잠금 */
-export interface CollabInfo { port: number; bases: string[]; links: InviteLink[]; devices: Device[]; locked: boolean; members: Member[] }
+export interface CollabInfo { port: number; bases: string[]; tunnel: { url: string; kind: "tailscale" | "cloudflare" } | null; links: InviteLink[]; devices: Device[]; locked: boolean; members: Member[] }
+export interface TunnelTools { tailscale: string | null; cloudflared: string | null }
 
 interface C {
 	/** 호스트: 서버가 켜져 있으면 그 정보 */
@@ -82,6 +83,13 @@ export async function startHost(): Promise<CollabInfo> {
 	await hostListening;
 	flush(true);
 	hostView();
+	// 바깥 길 — 깔린 도구가 있으면 켜자마자 연다(같은 링크가 사무실 안 · 밖에서 열리게). 못 열어도 사무실 망으로는 된다
+	if (!info.tunnel) {
+		const tools = await collabTools().catch(() => null);
+		if (tools && (tools.tailscale || tools.cloudflared)) {
+			collabTunnel(true).catch((e) => useDeck.getState().notify(`${tNow("collabTunnelFail")} ${String(e)}`, "err"));
+		}
+	}
 	unsub?.();
 	let cur = useDeck.getState().current, deckRef = useDeck.getState().deck;
 	unsub = useDeck.subscribe((s) => {
@@ -97,6 +105,9 @@ export const collabLinkNew = (name: string | null, hours: number | null) => call
 export const collabLinkRemove = (id: string) => call<CollabInfo>("collab_link_remove", { id }).then(setInfo);
 export const collabKick = (device: string) => call<CollabInfo>("collab_kick", { device }).then(setInfo);
 export const collabLock = (on: boolean) => call<CollabInfo>("collab_lock", { on }).then(setInfo);
+/** 바깥 길(터널) — 사무실 밖에서도 같은 링크로 (tunnel.rs) */
+export const collabTunnel = (on: boolean) => call<CollabInfo>("collab_tunnel", { on }).then(setInfo);
+export const collabTools = () => call<TunnelTools>("collab_tools");
 
 /** 호스트 화면을 다시 띄웠는데(새로 고침 · 오류 뒤 다시 그림) 서버가 켜져 있으면 다시 붙는다 — 안 붙으면 브라우저가 멈춘 화면을 본다 */
 export async function resumeHost() {

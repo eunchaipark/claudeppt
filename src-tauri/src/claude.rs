@@ -84,6 +84,16 @@ fn known_places(env: impl Fn(&str) -> Option<PathBuf>) -> Vec<PathBuf> {
 	v
 }
 
+/// 앱이 띄운 오래 도는 프로세스(claude · 바깥 길 터널)를 앱의 job 에 넣는다 — 앱이 어떻게 꺼지든 함께 꺼진다
+pub fn adopt(child: &tokio::process::Child) {
+	#[cfg(windows)]
+	if let (Some(j), Some(h)) = (job::app(), child.raw_handle()) {
+		j.adopt(h as _);
+	}
+	#[cfg(not(windows))]
+	let _ = child;
+}
+
 /// 앱이 띄운 claude 를 앱의 job 에 넣는다. job 은 「손잡이가 닫히면 안의 프로세스를 모두 끈다」로 만들고 손잡이를 끝까지 쥐므로,
 /// 앱이 어떻게 꺼지든(창 닫기 · 업데이트 설치가 앱을 끝냄 · 강제 종료 · 죽음) OS 가 claude 와 그 자식까지 끈다.
 /// 전에는 앱을 닫아도 돌던 claude 가 남아 덱 파일을 계속 고치고 구독 사용량을 썼다
@@ -288,10 +298,7 @@ pub async fn claude_run(app: AppHandle, state: State<'_, AppState>, spec: RunSpe
 	#[cfg(windows)]
 	cmd.creation_flags(0x0800_0000);
 	let mut child = cmd.spawn().map_err(|e| format!("claude 를 띄우지 못했다: {e}"))?;
-	#[cfg(windows)]
-	if let (Some(j), Some(h)) = (job::app(), child.raw_handle()) {
-		j.adopt(h as _);
-	}
+	adopt(&child);
 	if let Some(pid) = child.id() {
 		state.runs.lock().unwrap().insert(spec.turn.clone(), pid);
 	}
