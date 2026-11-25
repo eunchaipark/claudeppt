@@ -308,14 +308,15 @@
         "id": "14",
         "title": "[C3] 브라우저 팀원 직접 편집",
         "description": "브라우저에서도 글자 고치기 · 끌어 옮기기 · 방향키 · 지우기. 호스트가 한 줄로 받아 원본에 쓰고, 편집한 사람이 판에 남는다.",
-        "details": "rt.js 직접 편집 의도(applyDirect)를 원격에서 호스트로. 같은 쪽을 누가 고치는 중이면 「○○ 이 고치는 중」 표시, Claude 가 그 쪽 턴을 도는 동안은 막음(지금 동작), 같은 요소는 나중 것이 이김. 되돌리기(Ctrl+Z)는 그 사람 것만. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "rt.js 직접 편집 의도(applyDirect)를 원격에서 호스트로. 같은 쪽을 누가 고치는 중이면 「○○ 이 고치는 중」 표시, Claude 가 그 쪽 턴을 도는 동안은 막음(지금 동작), 같은 요소는 나중 것이 이김. 되돌리기(Ctrl+Z)는 그 사람 것만. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:30] collab 0640682 (+ 보안 CSP 56183e1). 의도 direct/undo/redo · Snap{by,after} 사람별 안전한 되돌리기 · 판 작성자 여럿 · editing 나눔 + 「○○ 님이 고치는 중」 · histBy. 시험: 원격 applyDirect → 호스트 파일 · 표시 · 판 「민수 직접 편집」, 섞어 고친 뒤 민수 되돌리기 거절(둘 다 남음) · 은채 되돌리기/다시 하기 OK, 판 「은채 · 민수 직접 편집」, Edge 에서 실제 두 번 누르기 → 입력 → Enter 로 호스트 파일에 들어감. 하는 중 찾은 보안 문제 1건 비공개 보고(GHSA-9x34-8r55-j5qw)",
         "testStrategy": "브라우저 탭에서 글자 고치기 → 호스트 화면 · 파일 · 판 작성자 확인, 두 탭 동시 편집 표시",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "12"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T11:30:41.336Z"
       },
       {
         "id": "15",
@@ -359,9 +360,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T11:18:35.550Z",
+      "lastModified": "2026-11-25T11:30:41.093Z",
       "taskCount": 17,
-      "completedCount": 11,
+      "completedCount": 12,
       "tags": [
         "collab"
       ]
