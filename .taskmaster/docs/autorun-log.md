@@ -209,3 +209,11 @@
 - `.taskmaster/docs/test-guide.md` 를 씀: 만든 것과 브랜치 · 띄우는 법 · 이미 확인한 것 · 직접 해 볼 시험(A 이 PC 한 대 · B 같은 와이파이의 다른 PC/휴대폰 · C 바깥 — 도구 설치) 단계와 기대 결과 · 알려진 한계 · 보안 1건
 - 더 확인: **release 빌드**(`npx tauri build --no-bundle`, 6분 53초)로 띄워 협업을 켜고 Edge 로 붙음 → 앱에 담긴 화면(`/assets/index-sXG8EMJ4.js`)이 내려오고 슬라이드 · 대화 · 접속 표시 정상(`shots/c17-release.png`), 장부가 이어져 민수가 링크 없이 다시 들어옴, `index` no-cache · `/assets` immutable · gzip 862KB → 282KB. 시험 기기는 내보냄, 앱은 끔
 - 확인하지 못한 것: 설치 파일(nsis)로 깐 앱
+
+## master #18 — image-size 취약점 (23:35 ~ 23:42)
+
+- 브랜치: `fix/image-size-audit` → **원본 PR a7garden/claudeppt#8** · collab 합침
+- `npm audit` high 1건: pptxgenjs 3.12 가 받는 image-size 1.x(JXL · HEIF · ICNS 무한 루프). 1.x 에는 고친 판이 없어 `overrides` 로 2.x(2.1.0). 잠금 파일은 image-size 와 그것이 쓰던 queue 만 바뀜
+- 따져 보니 pptxgenjs 의 브라우저 번들은 image-size 를 쓰지 않는다(Node 전용) → 앱에서는 닿지 않던 경로. 그래도 의존성 검사를 깨끗하게
+- 시험: `npm audit` 0 · `npm run build` 통과 · 빌드 번들에 image-size 없음 · 개발 실행에서 PPTX 내보내기(글자 뽑기 53KB · 그림 굽기 251KB) 그대로
+- Rust: `cargo audit` 이 없어 새로 더한 크레이트(axum 0.8 · tower-http 0.6 · sha2 0.10 · windows-sys 0.61)가 최신 판인 것만 확인

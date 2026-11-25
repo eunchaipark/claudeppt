@@ -93,12 +93,13 @@
         "id": "18",
         "title": "[보안] 의존성 취약점 — image-size(high, DoS) 고치기",
         "description": "npm audit 의 high 1건. pptxgenjs 가 쓰는 image-size 가 조작된 그림에서 끝없이 돈다. 협업으로 원격 팀원이 첨부 · 그림을 올리므로 호스트를 멈출 수 있다.",
-        "details": "npm audit fix 로 image-size 를 고친 판으로(pptxgenjs 3.12 가 받는 범위 안이면 그대로, 아니면 overrides). 내보내기 · 가져오기가 그대로 되는지 확인. pptxgenjs 4 올리기는 이 작업에 넣지 않는다(기능). cargo audit 이 깔려 있지 않으면 Rust 쪽은 cargo tree 로 알려진 취약 크레이트만 훑는다.",
+        "details": "npm audit fix 로 image-size 를 고친 판으로(pptxgenjs 3.12 가 받는 범위 안이면 그대로, 아니면 overrides). 내보내기 · 가져오기가 그대로 되는지 확인. pptxgenjs 4 올리기는 이 작업에 넣지 않는다(기능). cargo audit 이 깔려 있지 않으면 Rust 쪽은 cargo tree 로 알려진 취약 크레이트만 훑는다.\n\n[완료 23:27] fix/image-size-audit → 원본 PR(아래 기록) · collab 합침. overrides image-size ^2.0.3(2.1.0). npm audit 0 · build 통과 · 번들에 image-size 없음(브라우저 번들은 원래 안 씀 → 실제로는 닿지 않던 경로) · 개발 실행 PPTX 내보내기(글자 · 그림 굽기) 그대로. Rust: cargo audit 없음 — 새로 깐 크레이트(axum · tower-http · sha2)는 최신 판",
         "testStrategy": "npm audit 에 high 0 · npm run build · 개발 실행에서 그림이 든 덱 PPTX 내보내기 1회",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:27:54.594Z"
       },
       {
         "testStrategy": "",
@@ -115,14 +116,12 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T07:25:57.385Z",
-      "taskCount": 30,
-      "completedCount": 1,
+      "lastModified": "2026-11-25T14:27:54.398Z",
+      "taskCount": 10,
+      "completedCount": 2,
       "tags": [
         "master"
-      ],
-      "updated": "2026-11-25T07:42:31.344Z",
-      "description": "최적화 · 심각한 보안 — collab 다음에 한다. 원본 0.7.0 에서 코드 위치를 다시 확인하고 시작"
+      ]
     }
   },
   "collab": {
