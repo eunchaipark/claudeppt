@@ -41,12 +41,13 @@
         "id": "12",
         "title": "[M0] [성능] 시스템 프롬프트의 바뀌는 값 빼기 (프롬프트 캐시)",
         "description": "Slides: N 이 시스템 프롬프트에 있어 쪽 수가 바뀔 때마다 이어 온 대화 전체 캐시가 깨진다.",
-        "details": "prompt.ts:88 # Deck 구획을 turnPrompt 로 옮기고 번호 · 파일 · 제목 짧은 목차를 함께 넣어 deck.json 을 읽으러 오가는 일도 줄인다. 효과는 사용량 표시 작업의 cache_read 로 잰다. [0.6.0 재검증] 유효. prompt.ts:95.",
+        "details": "prompt.ts:88 # Deck 구획을 turnPrompt 로 옮기고 번호 · 파일 · 제목 짧은 목차를 함께 넣어 deck.json 을 읽으러 오가는 일도 줄인다. 효과는 사용량 표시 작업의 cache_read 로 잰다. [0.6.0 재검증] 유효. prompt.ts:95.\n\n[완료 23:40] perf/prompt-cache → 원본 PR #12 · collab 같은 변경. 시스템 프롬프트는 크기 · 출처 · 스타일 · 말만, 제목 · 쪽 수 · 목차(80쪽까지)는 요청문. 확인: 제목 · 쪽 수 바뀌어도 systemPrompt 글 같음, 진짜 Claude 2턴(쪽 3→4)에서 2턴 cache_read 8240 · create 239",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:40:58.987Z"
       },
       {
         "id": "13",
@@ -119,9 +120,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:38:05.859Z",
+      "lastModified": "2026-11-25T14:40:58.820Z",
       "taskCount": 10,
-      "completedCount": 5,
+      "completedCount": 6,
       "tags": [
         "master"
       ]

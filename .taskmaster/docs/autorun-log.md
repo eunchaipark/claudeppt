@@ -237,3 +237,9 @@
 - 브랜치: `perf/bake-fonts` → **원본 PR a7garden/claudeppt#11** · collab 같은 변경(rt.js)
 - 바꾼 것: @font-face 를 가족별로 모으고 data: 변환은 처음 쓸 때 한 번 · 굽는 요소 안 글자가 쓰는 가족만(얕은 굽기는 ::before/::after 만) · 글자 없으면 글꼴 없음
 - 잰 것(시험 덱에 흐림 장식 8개 + 제목 쪽): PPTX 내보내기 **1.3~1.4초 → 0.38~0.41초**. 구운 그림 8개 바이트 같음, 「똑같이」 내보내기의 글자 있는 쪽 그림도 고치기 전과 바이트 같음(Pretendard 그대로)
+
+## master #12 — 시스템 프롬프트 캐시 (~ 23:40)
+
+- 브랜치: `perf/prompt-cache` → **원본 PR a7garden/claudeppt#12** · collab 같은 변경
+- 바꾼 것: 시스템 프롬프트의 「# Deck」은 크기 · PPTX 출처만, 제목 · 쪽 수 · 쪽 목차(번호 · 파일 · 제목, 80쪽까지)는 요청문 끝에(`deckOutline`)
+- 확인: 제목을 바꾸고 쪽을 더한 덱으로 만든 시스템 프롬프트가 글자 하나 다르지 않음 · **진짜 Claude 2턴**(sonnet · low, 새 세션 — 끝나고 opus · xhigh 로 되돌림): 1턴에서 3 → 4쪽, 2턴 답 「4」, 2턴 usage `cache_read` 8,240 · `cache_creation` 239 (앞 대화를 그대로 캐시에서 읽음)
