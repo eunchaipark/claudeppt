@@ -1,14 +1,19 @@
 // 팀 협업 서버 — 「설정 › 협업」을 켜면 이 앱(호스트) 안에서 HTTP + WebSocket 을 연다. 끄면 닫는다. 기본은 꺼짐.
 //
 //   화면       같은 React 화면을 브라우저에 내준다 (설치 판: 앱에 담긴 화면 · 개발 실행: Vite 로 넘긴다)
-//   슬라이드    /_/deck/<id>[@커밋]/<경로> — deck:// 와 같은 serve() 를 쓴다 (경로 검사 · 런타임 끼우기 그대로)
+//   슬라이드    /_/d/<덱 열쇠>/<id>[@커밋]/<경로> — deck:// 와 같은 serve() 를 쓴다 (경로 검사 · 런타임 끼우기 그대로).
+//              브라우저는 슬라이드를 sandbox iframe(다른 출처)으로 연다 — 슬라이드 안 스크립트가 앱 화면에 손대거나 팀원 이름으로
+//              의도를 보내지 못하게. 그래서 슬라이드는 쿠키가 아니라 주소 안 덱 열쇠로 연다(읽기 전용, 화면 열쇠와 다르다).
+//              슬라이드 HTML 에는 CSP connect-src 'none' — 슬라이드 스크립트는 서버에 아무 요청도 못 한다
+//   캐시 · 압축  지금 파일은 ETag + no-cache(바뀌지 않았으면 304), 판 고정 주소(@커밋)와 해시 붙은 화면 파일은 immutable. gzip
 //   상태       호스트 화면이 덱 · 대화 · 세션 · 판을 collab_publish 로 올리면 접속한 모든 브라우저에 /_/ws 로 보낸다.
 //              새로 붙거나(다시 붙기 포함) 따라가지 못한 브라우저에는 지금 것을 통째로 다시 보낸다
 //   의도       브라우저가 하려는 일(요청 보내기 · 직접 편집 · 의견)은 호스트 화면에 「collab-intent」 사건으로 넘기고 답을 기다린다.
 //              쓰기는 호스트 한 곳에서만 — 두 화면이 같은 파일 · 대화 기록을 따로 쓰면 하나가 다른 것을 덮는다
 //   접속       누가 붙었고 어느 쪽을 보는지(members). 모든 브라우저와 호스트 화면에 알린다
 //   열쇠       켤 때 만드는 토큰. 링크(?k=)로 한 번 들어오면 쿠키로 바꾸고 주소에서 뗀다. 모든 요청에 쿠키나 토큰이 있어야 한다.
-//              IP 로 믿지 않는다 — 바깥 길(터널)로 온 요청은 127.0.0.1 로 보인다
+//              IP 로 믿지 않는다 — 바깥 길(터널)로 온 요청은 127.0.0.1 로 보인다.
+//              /_/ws · /_/rpc 는 같은 출처(Origin)에서 온 것만 — 다른 출처 페이지가 팀원 브라우저의 쿠키로 붙지 못하게
 //   읽기       /_/rpc 는 허용 목록뿐 — 열려 있는 덱 안 파일 읽기 · 판 목록. 쓰기 · 절대 경로 · 설정 · claude 실행은 없다
 
 use crate::{AppState, Res, err};
@@ -46,6 +51,8 @@ pub struct Collab {
 pub struct Hub {
 	app: AppHandle,
 	token: String,
+	/// 슬라이드 주소 안의 열쇠 — 열린 덱 파일 읽기만 된다
+	deck_key: String,
 	port: u16,
 	tx: broadcast::Sender<Arc<str>>,
 	shared: Mutex<Shared>,
@@ -172,6 +179,7 @@ pub async fn collab_start(app: AppHandle) -> Res<Info> {
 	let h = Arc::new(Hub {
 		app: app.clone(),
 		token: uuid::Uuid::new_v4().simple().to_string(),
+		deck_key: uuid::Uuid::new_v4().simple().to_string(),
 		port,
 		tx,
 		shared: Mutex::new(Shared::default()),
@@ -242,10 +250,11 @@ fn routes(h: Arc<Hub>) -> Router {
 	Router::new()
 		.route("/_/ws", get(ws))
 		.route("/_/rpc", post(rpc))
-		.route("/_/deck/{*rest}", get(deck))
+		.route("/_/d/{key}/{*rest}", get(deck))
 		.route("/__rt.js", get(deck_rt))
 		.fallback(get(front))
 		.layer(middleware::from_fn_with_state(h.clone(), auth))
+		.layer(tower_http::compression::CompressionLayer::new())
 		.with_state(h)
 }
 
@@ -260,6 +269,14 @@ fn query_of(uri: &Uri, key: &str) -> Option<String> {
 
 /// 열쇠 검사 — 쿠키 또는 ?k=. 링크로 처음 들어온 화면 요청은 쿠키를 심고 주소에서 열쇠를 뗀다
 async fn auth(Ax(h): Ax<Arc<Hub>>, req: Request, next: Next) -> Response {
+	let path = req.uri().path();
+	// 슬라이드는 주소 안 덱 열쇠로(처리기가 본다), 런타임은 누구에게나 같은 코드라 열쇠 없이
+	if path.starts_with("/_/d/") || path == "/__rt.js" {
+		return next.run(req).await;
+	}
+	if (path == "/_/ws" || path == "/_/rpc") && !same_origin(req.headers()) {
+		return StatusCode::FORBIDDEN.into_response();
+	}
 	if cookie_of(req.headers()).is_some_and(|c| same(&c, &h.token)) {
 		return next.run(req).await;
 	}
@@ -283,17 +300,65 @@ async fn auth(Ax(h): Ax<Arc<Hub>>, req: Request, next: Next) -> Response {
 
 const DENIED: &str = "<!doctype html><meta charset=utf-8><title>ClaudePPT</title><body style=\"font:15px system-ui;padding:40px\"><p>초대 링크로 들어와 주세요. 호스트에게 링크를 다시 받아 주세요.</p><p>Please open the invite link again. Ask the host for a new one.</p>";
 
-fn from_tauri(r: tauri::http::Response<Vec<u8>>) -> Response {
-	r.map(Body::from)
+/// 요청을 보낸 페이지가 이 서버에서 온 것인가 — Origin 의 호스트:포트가 Host 와 같아야 한다.
+/// 브라우저는 WebSocket 연결과 POST fetch 에 늘 Origin 을 붙인다. sandbox 슬라이드는 「null」이라 걸린다
+fn same_origin(headers: &HeaderMap) -> bool {
+	let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else { return false };
+	let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else { return false };
+	origin.split_once("://").is_some_and(|(_, h)| h.eq_ignore_ascii_case(host))
 }
 
-async fn deck(Ax(h): Ax<Arc<Hub>>, uri: Uri) -> Response {
-	let rest = uri.path().trim_start_matches("/_/deck");
-	from_tauri(crate::serve(&h.app, rest))
+/// 내용으로 만든 ETag (FNV-1a 64)
+fn etag(bytes: &[u8]) -> String {
+	let mut x: u64 = 0xcbf29ce484222325;
+	for b in bytes {
+		x ^= *b as u64;
+		x = x.wrapping_mul(0x100000001b3);
+	}
+	format!("\"{x:016x}\"")
+}
+
+/// 캐시 머리글 — immutable 이면 한 해 동안 다시 묻지 않고, 아니면 매번 ETag 로 묻는다(바뀌지 않았으면 304)
+fn cached(mut r: Response, immutable: bool) -> Response {
+	let v = if immutable { "public, max-age=31536000, immutable" } else { "no-cache" };
+	r.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static(v));
+	r
+}
+
+async fn deck(Ax(h): Ax<Arc<Hub>>, axum::extract::Path((key, _)): axum::extract::Path<(String, String)>, headers: HeaderMap, uri: Uri) -> Response {
+	if !same(&key, &h.deck_key) {
+		return StatusCode::UNAUTHORIZED.into_response();
+	}
+	let rest = uri.path()["/_/d/".len() + key.len()..].to_string();
+	let r = crate::serve(&h.app, &rest);
+	if r.status() != StatusCode::OK {
+		return r.map(Body::from);
+	}
+	// 판 고정 주소(<id>@<커밋>/…)는 바뀌지 않는다
+	let pinned = rest.trim_start_matches('/').split('/').next().is_some_and(|head| head.contains('@'));
+	let html = r.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|c| c.starts_with("text/html"));
+	let tag = etag(r.body());
+	if !pinned && headers.get(header::IF_NONE_MATCH).and_then(|v| v.to_str().ok()) == Some(tag.as_str()) {
+		let mut nm = Response::new(Body::empty());
+		*nm.status_mut() = StatusCode::NOT_MODIFIED;
+		nm.headers_mut().insert(header::ETAG, HeaderValue::from_str(&tag).unwrap());
+		return cached(nm, false);
+	}
+	let mut r = r.map(Body::from);
+	let hd = r.headers_mut();
+	// sandbox 슬라이드(출처 없음)가 글꼴 · 그림을 읽으려면 필요하다. 덱 열쇠가 곧 허락이라 쿠키를 쓰지 않는다
+	hd.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"));
+	hd.insert(header::ETAG, HeaderValue::from_str(&tag).unwrap());
+	if html {
+		hd.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("connect-src 'none'; form-action 'none'; base-uri 'self'; object-src 'none'"));
+	}
+	cached(r, pinned)
 }
 
 async fn deck_rt(Ax(h): Ax<Arc<Hub>>) -> Response {
-	from_tauri(crate::serve(&h.app, "/__rt.js"))
+	let mut r = crate::serve(&h.app, "/__rt.js").map(Body::from);
+	r.headers_mut().insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"));
+	cached(r, false)
 }
 
 /// 화면 파일. 설치 판은 앱에 담긴 것, 개발 실행은 Vite(devUrl)로 넘긴다 — 개발 중 고친 화면이 바로 보이게
@@ -314,7 +379,8 @@ async fn front(Ax(h): Ax<Arc<Hub>>, uri: Uri) -> Response {
 	let path = uri.path();
 	let asset = h.app.asset_resolver().get(path.to_string()).or_else(|| h.app.asset_resolver().get("/index.html".into()));
 	match asset {
-		Some(a) => (StatusCode::OK, [(header::CONTENT_TYPE, a.mime_type)], a.bytes).into_response(),
+		// Vite 가 이름에 내용 해시를 붙인 파일(/assets/…)은 바뀌지 않는다. index.html 은 새 판에서 바뀐다
+		Some(a) => cached((StatusCode::OK, [(header::CONTENT_TYPE, a.mime_type)], a.bytes).into_response(), path.starts_with("/assets/")),
 		None => StatusCode::NOT_FOUND.into_response(),
 	}
 }
@@ -352,7 +418,7 @@ async fn conn(h: Arc<Hub>, mut socket: WebSocket) {
 	let id = h.next.fetch_add(1, Ordering::SeqCst);
 	let (direct, mut inbox) = mpsc::unbounded_channel::<String>();
 	let mut rx = h.tx.subscribe();
-	let hello = json!({ "t": "hello", "conn": id }).to_string();
+	let hello = json!({ "t": "hello", "conn": id, "deckKey": h.deck_key }).to_string();
 	if socket.send(Message::Text(hello.into())).await.is_err() || socket.send(Message::Text(h.snapshot().into())).await.is_err() {
 		return;
 	}
@@ -450,6 +516,31 @@ mod tests {
 		let u: Uri = "/x?y=1&k=abc&z=2".parse().unwrap();
 		assert_eq!(query_of(&u, "k").as_deref(), Some("abc"));
 		assert_eq!(query_of(&"/x".parse().unwrap(), "k"), None);
+	}
+
+	#[test]
+	fn origin_must_match_host() {
+		let h = |origin: Option<&'static str>, host: &'static str| {
+			let mut m = HeaderMap::new();
+			if let Some(o) = origin {
+				m.insert(header::ORIGIN, HeaderValue::from_static(o));
+			}
+			m.insert(header::HOST, HeaderValue::from_static(host));
+			same_origin(&m)
+		};
+		assert!(h(Some("http://10.0.0.5:47815"), "10.0.0.5:47815"));
+		assert!(h(Some("https://abc.ts.net"), "abc.ts.net"));
+		assert!(!h(Some("http://10.0.0.5:8080"), "10.0.0.5:47815"), "같은 PC 다른 포트");
+		assert!(!h(Some("null"), "10.0.0.5:47815"), "sandbox 슬라이드");
+		assert!(!h(Some("https://evil.example"), "10.0.0.5:47815"));
+		assert!(!h(None, "10.0.0.5:47815"));
+	}
+
+	#[test]
+	fn etag_follows_content() {
+		assert_eq!(etag(b"a"), etag(b"a"));
+		assert_ne!(etag(b"a"), etag(b"b"));
+		assert!(etag(b"").starts_with('"') && etag(b"").ends_with('"'));
 	}
 
 	#[test]

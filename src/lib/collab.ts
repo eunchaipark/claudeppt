@@ -184,7 +184,7 @@ export function connect() {
 		ws.onopen = () => { retry = 0; useCollab.setState({ connected: true, ended: false }); hello(); };
 		ws.onmessage = (e) => {
 			const m = JSON.parse(e.data);
-			if (m.t === "hello") useCollab.setState({ conn: m.conn });
+			if (m.t === "hello") { remoteDeck.key = m.deckKey; useCollab.setState({ conn: m.conn }); }
 			else if (m.t === "state") apply(m.patch, !!m.full);
 			else if (m.t === "members") useCollab.setState({ members: m.list });
 			else if (m.t === "reply") {

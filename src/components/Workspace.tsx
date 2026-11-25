@@ -18,6 +18,7 @@ import { type MenuItem, openMenu } from "./ContextMenu";
 import { VersionBar, VersionLens } from "./VersionLens";
 import { SketchBoard } from "./Sketch";
 import { SlideFaces, StageFaces } from "./Collab";
+import { remote } from "../lib/transport";
 import Talk, { useTalkFold } from "./Talk";
 
 export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: { file: string; rev: number; width: number; height?: number; w: number; h: number; onWin?: (win: Window | null) => void; revHash?: string }) {
@@ -35,6 +36,8 @@ export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: {
 		<iframe
 			ref={ref}
 			src={src}
+			// 협업 브라우저에서는 슬라이드를 다른 출처로 — 슬라이드 안 스크립트가 앱 화면에 손대거나 이 사람 이름으로 의도를 보내지 못하게 (collab.rs)
+			sandbox={remote ? "allow-scripts" : undefined}
 			title={file}
 			width={w}
 			height={h}

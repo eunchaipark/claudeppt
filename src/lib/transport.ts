@@ -11,8 +11,9 @@ export const remote = typeof window !== "undefined" && !(window as any).__TAURI_
 /** 원격에서 읽기를 허락하는 명령 → 서버 rpc 이름. 덱 폴더(root · dir)는 그 덱의 id 로 바꿔 보낸다 — 서버는 열린 덱 안만 읽는다 */
 const READS: Record<string, string> = { fs_read_text: "read", fs_exists: "exists", vcs_log: "log" };
 
-/** 원격 화면이 보고 있는 덱 — 경로를 id 로 바꾸는 데 쓴다 (collab.ts 가 호스트 상태를 받을 때 채운다) */
-export const remoteDeck = { dir: "", id: "" };
+/** 원격 화면이 보고 있는 덱 — 경로를 id 로 바꾸는 데 쓴다 (collab.ts 가 호스트 상태를 받을 때 채운다).
+ *  key 는 슬라이드 주소 안의 덱 열쇠 — 슬라이드는 sandbox iframe 이라 쿠키 없이 이 열쇠로 연다 (collab.rs) */
+export const remoteDeck = { dir: "", id: "", key: "" };
 
 export class RemoteDenied extends Error {}
 
