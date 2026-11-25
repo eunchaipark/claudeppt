@@ -47,7 +47,8 @@ export interface Turn {
 	attach?: string[];
 	reply: string;
 	tools: ToolUse[];
-	status: "running" | "done" | "failed" | "stopped";
+	/** queued — 같은 세션의 앞 턴이 돌고 있거나 동시에 돌 수 있는 수가 찼다. 자리가 나면 돈다 */
+	status: "queued" | "running" | "done" | "failed" | "stopped";
 	cost?: number;
 	version?: { n: number; short: string; hash: string };
 	error?: string;
@@ -92,7 +93,10 @@ interface S {
 	/** 지금 대화 — 대화칸에 보이는 세션이자, 아직 어느 세션도 고치지 않은 쪽에 대한 요청이 가는 세션.
 	 *  마지막에 쓰인 세션 · 「새 대화」로 연 세션 · 세션 목록에서 고른 세션 */
 	talkKey: string | null;
+	/** 도는 턴이 하나라도 있으면 그중 하나 (직접 편집 · 되돌리기 · 판 되돌리기를 막는 데 쓴다) */
 	running: string | null;
+	/** 세션 key → 그 세션에서 도는 턴 — 다른 세션끼리는 함께 돈다 */
+	runs: Record<string, string>;
 	versions: Commit[];
 	releases: Release[];
 	preview: Commit | null;
@@ -131,7 +135,8 @@ interface S {
 	/** force — 앱 밖 Claude Code 가 방금 이 덱을 다뤘어도 보낸다 (알림의 「그래도 보내기」).
 	 *  from — 협업 브라우저 팀원이 보낸 요청 (collab.ts). 보낸 사람 · 그 사람이 보던 쪽 · 그 사람의 지금 대화로 처리하고, 호스트 화면(보는 대화 · 핀)은 건드리지 않는다 */
 	send: (text: string, attachments?: string[], force?: boolean, from?: SendFrom) => Promise<void>;
-	stop: () => void;
+	/** turn 을 주지 않으면 지금 대화의 도는 턴 */
+	stop: (turn?: string) => void;
 	/** 새 세션을 열어 지금 대화로 삼는다 — 대화칸이 빈 새 대화가 된다 */
 	newTalk: () => void;
 	/** 그 세션의 대화를 본다 — 지금 대화가 된다 (처음 고치는 쪽이 이 세션으로 간다) */
@@ -330,16 +335,16 @@ export function recapOf(turns: Turn[], key: string, skip: string): string {
  * 처음 보는 쪽이면 지금 대화(마지막에 쓰인 세션 · 「새 대화」로 연 세션). 세션이 하나도 없으면 key 가 null — 보낼 때 새로 연다.
  * via 는 세션을 정한 쪽의 번호 (지금 대화로 가면 없음)
  */
-export function routeOf(st: Pick<S, "deck" | "current" | "pins" | "bind" | "sessions" | "talkKey">, text: string): { key: string | null; via?: number } {
+export function routeOf(st: Pick<S, "deck" | "current" | "pins" | "bind" | "sessions" | "talkKey">, text: string): { key: string | null; via?: number; targets: string[] } {
 	const deck = st.deck;
-	if (!deck) return { key: null };
+	if (!deck) return { key: null, targets: [] };
 	const mentions = mentionsIn(text, deck);
 	const cur = deck.slides[st.current];
 	const targets = mentions.length ? mentions.map((m) => m.id) : st.pins.length ? st.pins.map((p) => p.slide) : cur ? [cur.id] : [];
 	const live = (k?: string) => !!k && st.sessions.some((x) => x.key === k);
 	const hit = targets.find((id) => live(st.bind[id]));
-	if (hit) return { key: st.bind[hit], via: deck.slides.findIndex((x) => x.id === hit) + 1 };
-	return { key: live(st.talkKey ?? undefined) ? st.talkKey : null };
+	if (hit) return { key: st.bind[hit], via: deck.slides.findIndex((x) => x.id === hit) + 1, targets };
+	return { key: live(st.talkKey ?? undefined) ? st.talkKey : null, targets };
 }
 const readJson = async <T,>(dir: string, rel: string, d: T): Promise<T> => {
 	try { return JSON.parse(await api.readText(dir, rel)); } catch { return d; }
@@ -352,14 +357,52 @@ const relOf = (dir: string, p?: string) => {
 	return a.toLowerCase().startsWith(d.toLowerCase()) ? a.slice(d.length) : a;
 };
 
-/** 보내는 중 — send 가 턴을 세우기 전부터 끝날 때까지. 협업 처리기도 본다 */
-let sending = false;
-export const isSending = () => sending;
+/** 동시에 도는 턴의 가장 많은 수 — Claude 프로세스 · 사용량이 한꺼번에 몰리지 않게 */
+const MAX_RUNS = 3;
+/** 턴이 고친 파일을 알려 주는 도구 — 함께 돈 턴의 판에 이 파일들만 담는다 */
+const EDIT_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+type Waiting = { turn: string; key: string; exec: () => Promise<void>; done: () => void };
+/** 기다리는 턴 — 앞에서부터, 그 세션이 비고 자리가 나면 돈다 */
+let waiting: Waiting[] = [];
+/** 턴 세우기는 한 줄로 — 「도는 중 · 기다리는 턴」을 본 뒤 턴을 세우기까지 판 남기기를 기다리는 틈에 다른 요청(다른 팀원 · 같은 요청 두 번)이
+ *  끼어들면 한 세션에 턴 둘이 함께 돌았다 (2026.11.25 협업 시험에서 찾음). 실행은 세션마다 따로 돈다 */
+let sendChain: Promise<unknown> = Promise.resolve();
 
-/** 요청 한 턴 — 세션 고르기 · Claude 실행 · 그림 채우기 · 판 남기기. send 가 한 번에 하나만 부른다 */
-async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string, attachments: string[], force: boolean, from?: SendFrom) {
-	const { dir, deck, running } = get();
-	if (!deck || running) return;
+const setRuns = (set: (p: Partial<S>) => void, runs: Record<string, string>) => set({ runs, running: Object.values(runs)[0] ?? null });
+
+function startRun(get: () => S, set: (p: Partial<S>) => void, w: Waiting) {
+	setRuns(set, { ...get().runs, [w.key]: w.turn });
+	set({ turns: get().turns.map((t) => (t.id === w.turn && t.status === "queued" ? { ...t, status: "running" } : t)) });
+	const dir = get().dir;
+	w.exec().finally(() => {
+		const runs = { ...get().runs };
+		delete runs[w.key];
+		setRuns(set, runs);
+		if (get().dir === dir) {
+			persistTalk(dir, get());
+			get().refreshVersions();
+		}
+		w.done();
+		pump(get, set);
+	});
+}
+
+/** 자리가 났다 — 기다리는 턴을 앞에서부터 돌린다 (그 세션이 비어 있고 동시 상한 안이면) */
+function pump(get: () => S, set: (p: Partial<S>) => void) {
+	for (const w of [...waiting]) {
+		const runs = get().runs;
+		if (Object.keys(runs).length >= MAX_RUNS) break;
+		if (runs[w.key]) continue;
+		waiting = waiting.filter((x) => x !== w);
+		startRun(get, set, w);
+	}
+}
+
+/** 요청 한 턴을 세운다 — 세션 고르기 · 턴 만들기. 바로 돌거나 기다린다. 돌려주는 약속은 그 턴이 끝날 때 풀린다 */
+async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string, attachments: string[], force: boolean, from?: SendFrom): Promise<{ done: Promise<void> } | undefined> {
+	const { dir, deck } = get();
+	if (!deck) return;
+	const deck0 = deck;
 	// 협업 팀원의 요청은 그 사람이 보던 쪽 · 그 사람의 핀으로
 	const pins = from ? from.pins : get().pins;
 	const current = from ? Math.max(0, deck.slides.findIndex((x) => x.id === from.current)) : get().current;
@@ -368,7 +411,8 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 	const by = from ? from.by : me();
 	if (!by) {
 		if (text.trim()) get().refill(text);
-		return get().notify(tNow("myNameAsk"), "err");
+		get().notify(tNow("myNameAsk"), "err");
+		return;
 	}
 	// 앱 밖 Claude Code 가 방금 이 덱을 다뤘으면 한 번 묻는다 — 그쪽이 고치던 파일이 이 턴의 판에 섞이고, 같은 쪽을 둘이 고치면 한쪽이 덮인다.
 	// 요청칸은 보내며 비워지므로 글을 되돌려 놓는다
@@ -384,9 +428,10 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 	}
 	clearUndo();
 	const s = useSettings.getState().s;
-	// 직접 편집이 남아 있으면 먼저 판으로 — Claude 의 판과 섞이지 않게
+	// 직접 편집이 남아 있으면 먼저 판으로 — Claude 의 판과 섞이지 않게. 도는 턴이 있으면 하지 않는다
+	// (그동안은 직접 편집을 받지 않아 남은 것이 없고, 하면 도는 턴이 고치던 파일을 「직접 편집」 판에 쓸어 담는다)
 	clearTimeout(directTimer);
-	await api.commit(dir, tNow("direct"), by).catch(() => {});
+	if (!get().running) await api.commit(dir, tNow("direct"), by).catch(() => {});
 	const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
 	const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
 	const cur = deck.slides[current];
@@ -402,68 +447,88 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 		key = ns.key;
 		set({ sessions });
 	}
+	// 이 요청이 가리킨 쪽(@쪽 · 핀 · 보던 쪽)을 바로 이 세션에 붙인다 — 턴이 끝나기 전에 같은 쪽 요청이 오면 다른 세션으로 가서
+	// 두 세션이 같은 파일을 함께 고치지 않게 (같은 세션이면 차례로 기다린다). 이미 다른 세션에 붙은 쪽은 그대로
+	const claim = { ...get().bind };
+	for (const id of route.targets) if (!claim[id]) claim[id] = key;
+	set({ bind: claim });
 	if (!from && get().talkKey && key !== get().talkKey && route.via) get().notify(tNow("routedTo").replace("{no}", String(route.via)).replace("{n}", key.slice(1)), "ok");
-	const session = sessions.find((x) => x.key === key)!;
-	const turn: Turn = { id: "t" + Date.now().toString(36), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: "running", by, session: key };
+	// 같은 세션의 앞 턴이 돌거나 기다리는 중이면, 또는 동시에 도는 수가 찼으면 기다린다 — 같은 세션은 차례로, 다른 세션끼리는 함께
+	const wait = !!get().runs[key] || waiting.some((w) => w.key === key) || Object.keys(get().runs).length >= MAX_RUNS;
+	const turn: Turn = { id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: wait ? "queued" : "running", by, session: key };
 	// 지금 대화 = 마지막에 쓰인 세션. 팀원의 요청이면 호스트가 보는 대화는 그대로 두고 그 팀원의 핀만 걷는다
-	set(from ? { turns: [...get().turns, turn], running: turn.id, pins: get().pins.filter((p) => !pins.includes(p)) } : { turns: [...get().turns, turn], running: turn.id, pins: [], talkKey: key });
+	set(from ? { turns: [...get().turns, turn], pins: get().pins.filter((p) => !pins.includes(p)) } : { turns: [...get().turns, turn], pins: [], talkKey: key });
 	persistPins(dir, get().pins);
+	persistTalk(dir, get());
 	from?.onStart?.({ key, via: route.via, turn: turn.id });
 	const patch = (fn: (t: Turn) => Turn) => set({ turns: get().turns.map((t) => (t.id === turn.id ? fn(t) : t)) });
 
-	try {
-		// 표시가 있으면 그 쪽 그림 위에 그려 붙인다. 못 만들어도 좌표 글은 가므로 턴은 그대로 돈다
-		if (notes.some((n) => n.shape)) {
-			patch((t) => ({ ...t, phase: tNow("marking") }));
-			attachments = [...attachments, ...(await markedPictures(dir, get().id, deck, notes).catch(() => []))];
-			patch((t) => ({ ...t, phase: undefined }));
+	// 실행 — 자리가 나면 돈다. 세션의 Claude id · 덱은 돌 때 읽는다 (앞 턴이 그 세션을 열었거나 쪽을 바꿨을 수 있다)
+	const exec = async () => {
+		const session = get().sessions.find((x) => x.key === key)!;
+		const deck = get().deck ?? deck0;
+		try {
+			// 표시가 있으면 그 쪽 그림 위에 그려 붙인다. 못 만들어도 좌표 글은 가므로 턴은 그대로 돈다
+			if (notes.some((n) => n.shape)) {
+				patch((t) => ({ ...t, phase: tNow("marking") }));
+				attachments = [...attachments, ...(await markedPictures(dir, get().id, deck, notes).catch(() => []))];
+				patch((t) => ({ ...t, phase: undefined }));
+			}
+			// 판 멘션 — 그 판 파일을 .claudeppt/versions/v<n>/ 에 펼치고 지금과 다른 쪽을 적어 넘긴다. 못 펼친 판은 번호만이라도 알린다
+			const vlines: string[] = [];
+			for (const v of versionMentions) {
+				const c = get().versions.find((x) => x.hash === v.hash);
+				vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
+			}
+			// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
+			const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
+			// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
+			const run = (p: string, resume: string | null) =>
+				api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });
+			let r = await run(prompt, session.claude);
+			// 세션 기록을 claude 쪽에서도 덱에서도 찾지 못했다 (기록 없이 옮겨 온 덱 · 지운 기록 · UUID 가 아닌 옛 id). 그대로 두면 이 세션을 이을 때마다 실패하고
+			// 장표의 맥락이 끊긴다 — 이 세션의 지난 요청 · 답을 요약해 앞에 붙여 새 Claude 세션으로 한 번 더 돌린다
+			if (session.claude && r.code !== 0 && /No conversation found|requires a valid session ID/i.test(r.stderr) && get().turns.find((t) => t.id === turn.id)?.status !== "stopped") {
+				set({ sessions: get().sessions.map((x) => (x.key === key ? { ...x, claude: null } : x)) });
+				patch((t) => ({ ...t, error: undefined, reply: "", tools: [], cost: undefined, phase: tNow("sessionRecovering") }));
+				r = await run(recapOf(get().turns, key, turn.id) + prompt, null);
+				patch((t) => ({ ...t, phase: undefined }));
+				get().notify(tNow("sessionRecovered").replace("{n}", key.slice(1)), "ok");
+			}
+			const t0 = get().turns.find((t) => t.id === turn.id)!;
+			let status: Turn["status"] = t0.status === "stopped" ? "stopped" : r.code === 0 && !t0.error ? "done" : "failed";
+			if (status === "failed" && !t0.error) patch((t) => ({ ...t, error: r.stderr.trim().split("\n").slice(-3).join("\n") || `exit ${r.code}` }));
+			// 그림 자리 채우기
+			const fresh = await readDeck(dir).catch(() => get().deck!);
+			set({ deck: fresh });
+			if (status !== "stopped" && s.image.provider !== "svg") {
+				const errs = await fillGenerated(dir, fresh, s, (p) => patch((t) => ({ ...t, phase: `${tNow("generating")} · ${p}` })));
+				if (errs.length) patch((t) => ({ ...t, error: [t.error, ...errs].filter(Boolean).join("\n") }));
+			}
+			// 이 턴이 처음 고친 쪽은 이 세션으로 확정한다 — 이미 다른 세션에 확정된 쪽은 그대로 둔다
+			const wrote = new Set(get().turns.find((t) => t.id === turn.id)!.tools.filter((x) => x.name === "Write" || x.name === "Edit" || x.name === "MultiEdit").map((x) => x.file));
+			const bind = { ...get().bind };
+			for (const sl of fresh.slides) if (wrote.has(sl.file) && !bind[sl.id]) bind[sl.id] = key;
+			set({ bind });
+			const summary = (text.trim() || notes.map((n) => n.text).join(" · ") || "핀").replace(/\s+/g, " ").slice(0, 72);
+			// 다른 세션의 턴이 함께 돌고 있으면 이 턴이 고친 파일만 판에 담는다 — 아직 도는 턴이 고치던 파일이 섞이지 않게.
+			// 혼자 돌았으면 전처럼 통째로 (그림 채우기가 만든 파일 · 함께 돌던 턴이 남긴 것까지)
+			const others = Object.keys(get().runs).filter((k) => k !== key).length > 0;
+			const touched = [...new Set(get().turns.find((t) => t.id === turn.id)!.tools.filter((x) => EDIT_TOOLS.includes(x.name)).map((x) => x.file).filter((x): x is string => !!x))];
+			const c = await (others ? api.commitPaths(dir, summary, by, touched) : api.commit(dir, summary, by)).catch(() => null);
+			patch((t) => ({ ...t, status, phase: undefined, version: c ? { n: c.n, short: c.short, hash: c.hash } : undefined }));
+		} catch (e) {
+			patch((t) => ({ ...t, status: "failed", error: String(e) }));
 		}
-		// 판 멘션 — 그 판 파일을 .claudeppt/versions/v<n>/ 에 펼치고 지금과 다른 쪽을 적어 넘긴다. 못 펼친 판은 번호만이라도 알린다
-		const vlines: string[] = [];
-		for (const v of versionMentions) {
-			const c = get().versions.find((x) => x.hash === v.hash);
-			vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
-		}
-		// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
-		const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
-		// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
-		const run = (p: string, resume: string | null) =>
-			api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });
-		let r = await run(prompt, session.claude);
-		// 세션 기록을 claude 쪽에서도 덱에서도 찾지 못했다 (기록 없이 옮겨 온 덱 · 지운 기록 · UUID 가 아닌 옛 id). 그대로 두면 이 세션을 이을 때마다 실패하고
-		// 장표의 맥락이 끊긴다 — 이 세션의 지난 요청 · 답을 요약해 앞에 붙여 새 Claude 세션으로 한 번 더 돌린다
-		if (session.claude && r.code !== 0 && /No conversation found|requires a valid session ID/i.test(r.stderr) && get().turns.find((t) => t.id === turn.id)?.status !== "stopped") {
-			set({ sessions: get().sessions.map((x) => (x.key === key ? { ...x, claude: null } : x)) });
-			patch((t) => ({ ...t, error: undefined, reply: "", tools: [], cost: undefined, phase: tNow("sessionRecovering") }));
-			r = await run(recapOf(get().turns, key, turn.id) + prompt, null);
-			patch((t) => ({ ...t, phase: undefined }));
-			get().notify(tNow("sessionRecovered").replace("{n}", key.slice(1)), "ok");
-		}
-		const t0 = get().turns.find((t) => t.id === turn.id)!;
-		let status: Turn["status"] = t0.status === "stopped" ? "stopped" : r.code === 0 && !t0.error ? "done" : "failed";
-		if (status === "failed" && !t0.error) patch((t) => ({ ...t, error: r.stderr.trim().split("\n").slice(-3).join("\n") || `exit ${r.code}` }));
-		// 그림 자리 채우기
-		const fresh = await readDeck(dir).catch(() => get().deck!);
-		set({ deck: fresh });
-		if (status !== "stopped" && s.image.provider !== "svg") {
-			const errs = await fillGenerated(dir, fresh, s, (p) => patch((t) => ({ ...t, phase: `${tNow("generating")} · ${p}` })));
-			if (errs.length) patch((t) => ({ ...t, error: [t.error, ...errs].filter(Boolean).join("\n") }));
-		}
-		// 이 턴이 처음 고친 쪽은 이 세션으로 확정한다 — 이미 다른 세션에 확정된 쪽은 그대로 둔다
-		const wrote = new Set(get().turns.find((t) => t.id === turn.id)!.tools.filter((x) => x.name === "Write" || x.name === "Edit" || x.name === "MultiEdit").map((x) => x.file));
-		const bind = { ...get().bind };
-		for (const sl of fresh.slides) if (wrote.has(sl.file) && !bind[sl.id]) bind[sl.id] = key;
-		set({ bind });
-		const summary = (text.trim() || notes.map((n) => n.text).join(" · ") || "핀").replace(/\s+/g, " ").slice(0, 72);
-		const c = await api.commit(dir, summary, by).catch(() => null);
-		patch((t) => ({ ...t, status, phase: undefined, version: c ? { n: c.n, short: c.short, hash: c.hash } : undefined }));
-	} catch (e) {
-		patch((t) => ({ ...t, status: "failed", error: String(e) }));
-	} finally {
-		set({ running: null });
-		persistTalk(dir, get());
-		get().refreshVersions();
-	}
+	};
+	// 약속을 바로 돌려주면 async 함수가 그것을 풀어 끝날 때까지 기다린다 — 감싸서 돌려준다 (턴 세우기 줄이 턴이 끝날 때까지 막혔다)
+	return {
+		done: new Promise<void>((done) => {
+			const w: Waiting = { turn: turn.id, key, exec, done };
+			if (wait) waiting.push(w);
+			else startRun(get, set, w);
+		}),
+	};
 }
 
 export const useDeck = create<S>()((set, get) => ({
@@ -482,6 +547,7 @@ export const useDeck = create<S>()((set, get) => ({
 	bind: {},
 	talkKey: null,
 	running: null,
+	runs: {},
 	versions: [],
 	releases: [],
 	preview: null,
@@ -543,7 +609,7 @@ export const useDeck = create<S>()((set, get) => ({
 				let m: any;
 				try { m = JSON.parse(line); } catch { return; }
 				// 지금 이 프로젝트에서 돌고 있는 턴의 사건만 받는다 — 다른 턴의 세션 id 가 섞이면 다음 턴이 엉뚱한 대화를 잇는다
-				if (turn !== get().running) return;
+				if (!Object.values(get().runs).includes(turn)) return;
 				const patch = (fn: (t: Turn) => Turn) => set({ turns: get().turns.map((t) => (t.id === turn ? fn(t) : t)) });
 				// Claude Code 의 세션 id 는 이 턴이 이어 쓴 세션에 적는다 — 다음에 그 세션을 이을 때 쓴다
 				const keep = (sid: string) => {
@@ -586,14 +652,15 @@ export const useDeck = create<S>()((set, get) => ({
 
 	closeProject: async () => {
 		// 턴이 도는 중에 닫으면 끝난 턴이 다음에 연 프로젝트의 덱 · 대화를 덮어쓴다 — 먼저 멈추고 끝나기를 기다린다
-		if (get().running) {
-			get().stop();
+		if (get().running || waiting.length) {
+			for (const w of [...waiting]) get().stop(w.turn);
+			for (const id of Object.values(get().runs)) get().stop(id);
 			while (get().running) await new Promise((r) => setTimeout(r, 200));
 		}
 		clearTimeout(directTimer);
 		const { id } = get();
 		if (id) await api.close(id).catch(() => {});
-		set({ dir: "", id: "", deck: null, turns: [], sessions: [], bind: {}, talkKey: null, pins: [], versions: [], preview: null, running: null, vdiff: null });
+		set({ dir: "", id: "", deck: null, turns: [], sessions: [], bind: {}, talkKey: null, pins: [], versions: [], preview: null, running: null, runs: {}, vdiff: null });
 	},
 
 	setCurrent: (i) => set({ current: Math.max(0, Math.min(i, (get().deck?.slides.length || 1) - 1)) }),
@@ -673,15 +740,10 @@ export const useDeck = create<S>()((set, get) => ({
 	},
 
 	send: async (text, attachments = [], force = false, from) => {
-		// 보내기는 한 번에 하나 — 「도는 중」을 본 뒤 턴을 세우기까지 판 남기기를 기다리는 틈에 다른 요청(다른 팀원 · 같은 요청 두 번)이
-		// 끼어들면 한 세션에 턴 둘이 함께 돌았다 (2026.11.25 협업 시험에서 찾음)
-		if (sending) return;
-		sending = true;
-		try {
-			await sendTurn(get, set, text, attachments, force, from);
-		} finally {
-			sending = false;
-		}
+		const made = sendChain.then(() => sendTurn(get, set, text, attachments, force, from));
+		sendChain = made.catch(() => {});
+		// 세워졌으면 그 턴이 끝날 때까지 기다린다 (부른 쪽이 끝을 기다리게 — 그림판 · 처음 만들기)
+		await (await made)?.done;
 	},
 
 	newTalk: () => {
@@ -702,10 +764,19 @@ export const useDeck = create<S>()((set, get) => ({
 		persistTalk(dir, get());
 	},
 
-	stop: () => {
-		const r = get().running;
+	stop: (turn) => {
+		const st = get();
+		const r = turn ?? (st.talkKey ? st.runs[st.talkKey] : undefined) ?? st.running;
 		if (!r) return;
 		set({ turns: get().turns.map((t) => (t.id === r ? { ...t, status: "stopped" } : t)) });
+		// 기다리던 턴이면 줄에서 빼고 끝낸다
+		const w = waiting.find((x) => x.turn === r);
+		if (w) {
+			waiting = waiting.filter((x) => x !== w);
+			persistTalk(st.dir, get());
+			w.done();
+			return;
+		}
 		api.claudeStop(r);
 	},
 

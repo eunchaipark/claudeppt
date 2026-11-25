@@ -268,8 +268,10 @@ function TurnView({ turn, head: isHead, onVersion }: { turn: Turn; head: boolean
 			{(turn.reply || live) && <div className="reply">{turn.reply}</div>}
 			{turn.error && <div className="err">{turn.error}</div>}
 			{/* 끝줄 — 이 턴이 남긴 판(지금 판은 채움) · 고친 쪽. 도는 중이면 뛰는 점과 지금 하는 일 */}
-			{(live || turn.version || changed || turn.status === "stopped" || turn.phase) && (
+			{(live || turn.version || changed || turn.status === "stopped" || turn.status === "queued" || turn.phase) && (
 				<div className="foot" title={detail}>
+					{/* 기다리는 턴 — 같은 세션의 앞 턴이 끝나면(또는 동시에 도는 수에 자리가 나면) 돈다. 멈춤으로 줄에서 뺄 수 있다 */}
+					{turn.status === "queued" && <><span className="phase">{t("queued")}</span><button className="more" onClick={() => useDeck.getState().stop(turn.id)}>{t("cancel")}</button></>}
 					{live && <span className="run" aria-label={t("working")} />}
 					{turn.version && <button className={"node" + (isHead ? " head" : "")} onClick={onVersion} title={`${turn.version.short}${turn.cost != null ? ` · $${turn.cost.toFixed(3)}` : ""}`}>v{turn.version.n}</button>}
 					{turn.phase && <span className="phase">{turn.phase}</span>}
@@ -320,7 +322,8 @@ function Composer() {
 	const t = useT();
 	const pins = useDeck((s) => s.pins);
 	const deck = useDeck((s) => s.deck)!;
-	const running = useDeck((s) => s.running);
+	// 지금 대화에서 도는 턴 — 멈춤은 이 턴만. 다른 세션이 돌고 있어도 보낼 수 있다(기다리거나 함께 돈다)
+	const myRun = useDeck((s) => (s.talkKey ? s.runs[s.talkKey] : undefined));
 	const send = useDeck((s) => s.send);
 	const stop = useDeck((s) => s.stop);
 	const update = useDeck((s) => s.updatePin);
@@ -408,7 +411,7 @@ function Composer() {
 
 	const route = useMemo(() => routeOf({ deck, current, pins, bind, sessions, talkKey }, text), [deck, current, pins, bind, sessions, talkKey, text]);
 	const routeText = !route.key ? t("routeNew") : (route.via ? t("routeVia").replace("{no}", String(route.via)) : t("routeTalk")).replace("{n}", route.key.slice(1));
-	const can = !running && !!myName && (text.trim() || pins.length || attach.length);
+	const can = !!myName && (text.trim() || pins.length || attach.length);
 	const go = () => {
 		if (!can) return;
 		send(text, attach);
@@ -425,8 +428,9 @@ function Composer() {
 	};
 	const slideNo = (id: string) => deck.slides.findIndex((s) => s.id === id) + 1;
 
-	const sendBtn = running ? (
-		<button className="send stop" onClick={stop}>{t("stop")}</button>
+	// 지금 대화가 돌고 있고 쓴 것이 없으면 멈춤. 쓰고 있으면 보내기(그 세션 앞 턴이 끝난 뒤 돈다)
+	const sendBtn = myRun && !can ? (
+		<button className="send stop" onClick={() => stop(myRun)}>{t("stop")}</button>
 	) : (
 		<button className={"send" + (pins.length ? " pins" : "")} disabled={!can} onClick={go}>
 			{pins.length ? `${t("sendPins")} ${pins.length}` : t("send")}<kbd>↵</kbd>

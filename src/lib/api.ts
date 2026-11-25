@@ -42,6 +42,8 @@ export const api = {
 	vcsInit: (dir: string) => invoke<void>("vcs_init", { dir }),
 	/** author — 이 판을 시킨 팀원 이름. 주면 git 작성자로 남는다 */
 	commit: (dir: string, message: string, author?: string) => invoke<Commit | null>("vcs_commit", { dir, message, author: author || null }),
+	/** 이 파일들만 한 판으로 — 여러 세션의 턴이 함께 돌 때 끝난 턴의 판에 다른 턴의 파일이 섞이지 않게 */
+	commitPaths: (dir: string, message: string, author: string | undefined, paths: string[]) => invoke<Commit | null>("vcs_commit_paths", { dir, message, author: author || null, paths }),
 	log: (dir: string, limit?: number) => invoke<Commit[]>("vcs_log", { dir, limit }),
 	tag: (dir: string, name: string) => invoke<void>("vcs_tag", { dir, name }),
 	restore: (dir: string, hash: string, message: string, author?: string) => invoke<Commit | null>("vcs_restore", { dir, hash, message, author: author || null }),

@@ -81,6 +81,7 @@ pub fn run() {
 			project::reveal,
 			vcs::vcs_init,
 			vcs::vcs_commit,
+			vcs::vcs_commit_paths,
 			vcs::vcs_log,
 			vcs::vcs_tag,
 			vcs::vcs_restore,

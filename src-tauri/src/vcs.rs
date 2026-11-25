@@ -124,8 +124,39 @@ fn lock(d: &Path) -> Res<Lock> {
 	}
 }
 
+/// 이 파일들만 한 판으로 — 여러 세션의 Claude 턴이 함께 돌 때, 끝난 턴의 판에 아직 도는 다른 턴이 고치던 파일이 섞이지 않게.
+/// 경로는 덱 폴더 기준 상대 경로만 받는다 (절대 경로 · .. 은 건너뛴다). 남은 파일은 다음 판에 들어간다
+#[tauri::command(async)]
+pub fn vcs_commit_paths(dir: String, message: String, author: Option<String>, paths: Vec<String>) -> Res<Option<Commit>> {
+	vcs_init(dir.clone())?;
+	let d = Path::new(&dir);
+	let _l = lock(d)?;
+	if run(d, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+		// 첫 판은 통째로
+		return commit_all(d, &message, author.as_deref());
+	}
+	// 색인만 비운다 — 작업 파일은 그대로
+	run(d, &["reset", "-q"])?;
+	for p in paths.iter().map(|p| p.replace('\\', "/")).filter(|p| safe_rel(p)) {
+		// :(literal) — 경로의 * ? [ 를 무늬로 읽지 않게. 지운 파일도 -A 로 담긴다
+		let spec = format!(":(literal){p}");
+		let _ = run(d, &["add", "-A", "--", &spec]);
+	}
+	finish(d, &message, author.as_deref())
+}
+
+/// 덱 폴더 안 상대 경로인가
+fn safe_rel(p: &str) -> bool {
+	!p.is_empty() && !p.starts_with('/') && !p.contains(':') && !p.split('/').any(|c| c == "..")
+}
+
 fn commit_all(d: &Path, message: &str, author: Option<&str>) -> Res<Option<Commit>> {
 	run(d, &["add", "-A"])?;
+	finish(d, message, author)
+}
+
+/// 색인에 담긴 것을 한 판으로 (바뀐 것이 없으면 None, 첫 판은 비어 있어도 남긴다)
+fn finish(d: &Path, message: &str, author: Option<&str>) -> Res<Option<Commit>> {
 	let changed = !git(d).args(["diff", "--cached", "--quiet"]).status().map_err(err)?.success();
 	let first = run(d, &["rev-parse", "--verify", "-q", "HEAD"]).is_err();
 	if !changed && !first {
@@ -243,6 +274,33 @@ mod tests {
 		assert_eq!((t.author.as_str(), t.subject.as_str()), ("지호", "tab\there"));
 		let log = vcs_log(dir.clone(), None).unwrap();
 		assert_eq!(log.iter().map(|c| c.author.as_str()).collect::<Vec<_>>(), ["지호", "ClaudePPT", "은지", "ClaudePPT", "민수"]);
+		let _ = std::fs::remove_dir_all(p);
+	}
+
+	/// 여러 턴이 함께 돌 때 — 끝난 턴의 판에는 그 턴이 고친 파일만, 남은 것은 다음 판에
+	#[test]
+	fn commit_paths_takes_only_given_files() {
+		let dir = tmp("paths");
+		let p = Path::new(&dir);
+		std::fs::create_dir_all(p.join("slides")).unwrap();
+		std::fs::write(p.join("slides/a.html"), "a1").unwrap();
+		std::fs::write(p.join("slides/b.html"), "b1").unwrap();
+		vcs_commit(dir.clone(), "첫 판".into(), None).unwrap().unwrap();
+		std::fs::write(p.join("slides/a.html"), "a2").unwrap();
+		std::fs::write(p.join("slides/b.html"), "b2").unwrap();
+		std::fs::write(p.join("slides/new [1].html"), "n").unwrap();
+		let c = vcs_commit_paths(dir.clone(), "세션 1 턴".into(), Some("민수".into()), vec!["slides/a.html".into(), "slides/new [1].html".into(), "../outside.txt".into(), "C:/x".into()]).unwrap().unwrap();
+		assert_eq!(c.author, "민수");
+		let files = run(p, &["show", "--name-only", "--format=", "HEAD"]).unwrap();
+		let mut files: Vec<&str> = files.lines().collect();
+		files.sort();
+		assert_eq!(files, ["slides/a.html", "slides/new [1].html"]);
+		// b 는 아직 바뀐 채로 남아 있다가 다음 판에
+		let c2 = vcs_commit(dir.clone(), "남은 것".into(), Some("은채".into())).unwrap().unwrap();
+		assert_eq!(run(p, &["show", "--name-only", "--format=", "HEAD"]).unwrap().trim(), "slides/b.html");
+		assert_eq!(c2.n, 3);
+		// 담을 것이 없으면 판을 남기지 않는다
+		assert!(vcs_commit_paths(dir.clone(), "없음".into(), None, vec!["slides/a.html".into()]).unwrap().is_none());
 		let _ = std::fs::remove_dir_all(p);
 	}
 

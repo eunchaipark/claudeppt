@@ -12,7 +12,7 @@ import { attachable, relFor, useAttach } from "./attach";
 import { call, remote, remoteDeck } from "./transport";
 import { tNow } from "./i18n";
 import { useSettings } from "./settings";
-import { isSending, me, nextSession, persistTalk, type Turn, useDeck } from "./store";
+import { me, nextSession, persistTalk, type Turn, useDeck } from "./store";
 
 export interface Member { conn: number; device: string; name: string; slide: string | null; host: boolean; since: number }
 export interface InviteLink { id: string; url: string; name: string | null; expires: number | null; expired: boolean }
@@ -35,7 +35,7 @@ interface C {
 export const useCollab = create<C>()(() => ({ info: null, members: [], conn: null, connected: false, ended: false, kicked: false }));
 
 /** 호스트와 브라우저가 함께 쓰는 칸 — 나머지(보는 쪽 · 도구 · 비교 · 알림 · 되돌리기 쌓임)는 보는 사람 몫 */
-const SHARED = ["dir", "id", "deck", "rev", "sessions", "bind", "talkKey", "versions", "releases", "running", "pins", "editing", "histBy"] as const;
+const SHARED = ["dir", "id", "deck", "rev", "sessions", "bind", "talkKey", "versions", "releases", "running", "runs", "pins", "editing", "histBy"] as const;
 type Key = (typeof SHARED)[number];
 
 // ── 호스트 ──
@@ -151,8 +151,7 @@ const UPLOAD_MAX = 10 * 1024 * 1024;
 onIntent("send", (from, a) => new Promise((ok, no) => {
 	const d = useDeck.getState();
 	if (!d.deck) return no(new Error(tNow("collabWaiting")));
-	// 지금은 앱 전체가 한 번에 한 턴이다 (세션마다 대기열은 다음 작업)
-	if (d.running || isSending()) return no(new Error(tNow("collabBusy")));
+	// 바쁘면 거절하지 않는다 — 같은 세션은 앞 턴 뒤에 기다리고, 다른 세션은 함께 돈다 (store sendTurn)
 	const pins = d.pins.filter((p) => Array.isArray(a.pins) && a.pins.includes(p.id));
 	// 첨부는 그 팀원이 올린 것(.claudeppt/attach/)만 — 다른 곳의 경로를 적어 보내 Claude 가 읽게 하지 못하게
 	const atts: string[] = (Array.isArray(a.attachments) ? a.attachments : []).filter((x: unknown) => typeof x === "string" && /^\.claudeppt\/attach\/[^\\/]+$/.test(x));
@@ -161,9 +160,11 @@ onIntent("send", (from, a) => new Promise((ok, no) => {
 		.then(() => { if (!started) ok(null); }, no);
 }));
 
+/** 멈춤 — 그 팀원이 보는 대화의 도는 턴이나 기다리는 턴 (턴 id 를 받는다) */
 onIntent("stop", async (_from, a) => {
 	const d = useDeck.getState();
-	if (d.running && (!a.turn || a.turn === d.running)) d.stop();
+	const t = d.turns.find((x) => x.id === a.turn);
+	if (t && (t.status === "running" || t.status === "queued")) d.stop(t.id);
 });
 
 /** 새 대화 — 호스트가 보는 대화는 그대로 두고 새 세션만 만든다. 그 팀원의 지금 대화가 아직 빈 세션이면 그것을 쓴다 */
@@ -340,7 +341,7 @@ function remoteActions() {
 			if (st.talkKey && r.key !== st.talkKey && r.via) d.notify(tNow("routedTo").replace("{no}", String(r.via)).replace("{n}", r.key.slice(1)), "ok");
 			useDeck.setState({ talkKey: r.key });
 		},
-		stop: () => { intent("stop", { turn: useDeck.getState().running }).catch(fail); },
+		stop: (turn?: string) => { const st = useDeck.getState(); intent("stop", { turn: turn ?? (st.talkKey ? st.runs[st.talkKey] : null) }).catch(fail); },
 		newTalk: () => { intent<{ key: string }>("newTalk", { talkKey: useDeck.getState().talkKey }).then((r) => { if (r) { useDeck.setState({ talkKey: r.key }); d.notify(tNow("newTalkDone").replace("{n}", r.key.slice(1)), "ok"); } }, fail); },
 		viewSession: (key: string) => useDeck.setState({ talkKey: key }),
 		addSlide: hostOnly,
