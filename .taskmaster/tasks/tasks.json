@@ -251,14 +251,15 @@
         "id": "10",
         "title": "[C2] 초대 링크 · 이름 한 번 · 참가자 관리",
         "description": "줌처럼 링크 하나로 들어온다. 처음 들어올 때 이름을 한 번 적고 브라우저가 기억한다. 인증 없음. 호스트가 참가자를 본다.",
-        "details": "링크 https://<주소>/j/<토큰>: 공용(여럿, 이름 직접) · 개인(이름 고정). 첫 접속 때 이름 → 기기 쿠키(HttpOnly · SameSite=Strict) + 주소창에서 토큰 지움. 호스트 「협업」 창: 링크 만들기 · 복사 · 만료 · 다시 만들기, 참가자 목록, 내보내기, 대기실(선택), 회의 잠금. 토큰은 해시로만 .claudeppt/collab.json 에(.cppt 에서 빼기). 원격 팀원의 이름 = 요청 · 편집 · 판의 보낸 사람. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "링크 https://<주소>/j/<토큰>: 공용(여럿, 이름 직접) · 개인(이름 고정). 첫 접속 때 이름 → 기기 쿠키(HttpOnly · SameSite=Strict) + 주소창에서 토큰 지움. 호스트 「협업」 창: 링크 만들기 · 복사 · 만료 · 다시 만들기, 참가자 목록, 내보내기, 대기실(선택), 회의 잠금. 토큰은 해시로만 .claudeppt/collab.json 에(.cppt 에서 빼기). 원격 팀원의 이름 = 요청 · 편집 · 판의 보낸 사람. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:59] collab c073978. invite.rs 장부(링크 공용/개인 · 만료 · 기기 SHA-256 · 잠금, 앱 데이터 collab.json) + /j/<열쇠> 이름 화면(한영) + 기기 쿠키 + 서버가 정한 이름 + 설정 협업 칸(링크 · 개인 링크 · 만료 · 잠금 · 들어온 사람 · 내보내기). 대기실은 하지 않음(선택 항목, 잠금으로 대신). 시험: cargo test invite 5개 · curl 9가지 · Edge 3프로필: 공용 링크 이름 화면→민수, 개인 링크 지호 바로, 잠금 중 새 사람 거절 화면 · 민수 새로 고침 OK, 지호 내보내기 → 즉시 끊김 + 덱 걷힘 + 새로 고침 401, 협업 껐다 켜기 · 앱 다시 띄우기 뒤 민수 저절로 다시 붙음",
         "testStrategy": "브라우저 탭으로 링크 열기 → 이름 → 다시 열면 묻지 않음 · 내보내기 후 막힘 · 토큰 없는 요청 401",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "7"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:59:23.471Z"
       },
       {
         "id": "11",
@@ -356,9 +357,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T10:40:59.043Z",
+      "lastModified": "2026-11-25T10:59:23.285Z",
       "taskCount": 17,
-      "completedCount": 9,
+      "completedCount": 10,
       "tags": [
         "collab"
       ]
