@@ -217,3 +217,55 @@ export function CollabSettings() {
 		</div>
 	);
 }
+
+/** 대화 머리 「의견 n」 — 덱의 열린 의견(누가 · 몇 쪽 · 무엇). 누르면 그 쪽으로, 해결 · 이 쪽 세션에 보내기. 협업 중에만 */
+export function CommentsButton() {
+	const t = useT();
+	const pins = useDeck((s) => s.pins);
+	const deck = useDeck((s) => s.deck);
+	const setCurrent = useDeck((s) => s.setCurrent);
+	const { info } = useCollab();
+	const [open, setOpen] = useState(false);
+	const [showDone, setShowDone] = useState(false);
+	const ref = useRef<HTMLSpanElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const k = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+		addEventListener("mousedown", k);
+		return () => removeEventListener("mousedown", k);
+	}, [open]);
+	if ((!remote && !info) || !deck) return null;
+	const live = pins.filter((p) => !p.done);
+	const done = pins.filter((p) => p.done);
+	const no = (id: string) => deck.slides.findIndex((s) => s.id === id) + 1;
+	const list = showDone ? done : live;
+	return (
+		<span className="collabwrap" ref={ref}>
+			<button className={"talk-comments" + (live.length ? " has" : "")} onClick={() => setOpen(!open)} aria-expanded={open}>{t("commentsN").replace("{n}", String(live.length))}</button>
+			{open && (
+				<div className="pop comments" role="dialog" aria-label={t("comments")}>
+					{list.length === 0 && <p className="dim">{t("noComments")}</p>}
+					{list.map((p) => (
+						<div className="cm" key={p.id}>
+							<div className="top">
+								{p.by && <Face m={{ conn: 0, device: "", name: p.by, slide: null, host: false, since: 0 }} small />}
+								<span className="nm">{p.by || "-"}</span>
+								<button className="mono" onClick={() => setCurrent(no(p.slide) - 1)}>{no(p.slide)}{t("slideN") === "쪽" ? "쪽" : ""}</button>
+							</div>
+							<p className="txt">{p.text || "…"}</p>
+							<div className="acts">
+								{p.done
+									? <button onClick={() => useDeck.getState().resolvePin(p.id, false)}>{t("reopen")}</button>
+									: <>
+										<button onClick={() => useDeck.getState().resolvePin(p.id, true)}>{t("resolve")}</button>
+										<button onClick={() => { useDeck.getState().sendPin(p.id); setOpen(false); }} title={t("pinSendHint")}>{t("pinSendShort")}</button>
+									</>}
+							</div>
+						</div>
+					))}
+					{done.length > 0 && <button className="more" onClick={() => setShowDone(!showDone)}>{showDone ? t("commentsN").replace("{n}", String(live.length)) : t("resolvedN").replace("{n}", String(done.length))}</button>}
+				</div>
+			)}
+		</span>
+	);
+}

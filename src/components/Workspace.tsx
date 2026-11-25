@@ -19,6 +19,7 @@ import { VersionBar, VersionLens } from "./VersionLens";
 import { SketchBoard } from "./Sketch";
 import { EditingNote, SlideFaces, StageFaces } from "./Collab";
 import { remote } from "../lib/transport";
+import { useSettings } from "../lib/settings";
 import Talk, { useTalkFold } from "./Talk";
 
 export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: { file: string; rev: number; width: number; height?: number; w: number; h: number; onWin?: (win: Window | null) => void; revHash?: string }) {
@@ -277,7 +278,7 @@ function Rail() {
 				if (e.key === "Delete" && !preview) removeSlide(current);
 			}}>
 			{deck.slides.map((sl, i) => {
-				const n = pins.filter((p) => p.slide === sl.id).length;
+				const n = pins.filter((p) => p.slide === sl.id && !p.done).length;
 				// 비교 차이는 숫자 대신 미리보기 테두리로 — 숫자는 비교 렌즈를 켰을 때만. 0.1% 차이에 모든 쪽이 빨간 글자로 칠해지면 무엇이 급한지 안 보인다
 				// 판 비교 중이면 고른 판과 다른 쪽에 점선 테두리 · 그 뒤에 생긴 쪽에 「새」 — 바뀐 쪽만 골라 넘겨 볼 수 있게
 				const vs = !preview ? vdiff?.slides[sl.id] : undefined;
@@ -507,7 +508,8 @@ function markToPin(s: Shape, pinAt: (x: number, y: number, shape?: Shape) => voi
 /** 한 쪽 위의 표시 · 핀 층. 한 쪽 보기와 이어 보기가 같이 쓴다 — 핀 번호는 덱 전체에서 꽂은 차례다 */
 function SlideMarks({ slideId, w, h, scale, drawing, active, setActive, onMark }: { slideId: string; w: number; h: number; scale: number; drawing: boolean; active: string | null; setActive: (id: string | null) => void; onMark: (s: Shape) => void }) {
 	const pins = useDeck((s) => s.pins);
-	const mine = pins.filter((p) => p.slide === slideId);
+	// 해결된 의견은 감춘다 (의견 목록의 「해결됨」에서 다시 연다)
+	const mine = pins.filter((p) => p.slide === slideId && !p.done);
 	return (
 		<div className="overlay">
 			<MarkLayer marks={mine} w={w} h={h} scale={scale} drawing={drawing} active={active} onMark={onMark} />
@@ -712,6 +714,26 @@ function PinMark({ pin, n, scale, flip, open, onOpen, onClose }: { pin: Pin; n: 
 	const t = useT();
 	const update = useDeck((s) => s.updatePin);
 	const remove = useDeck((s) => s.removePin);
+	const meName = useSettings((x) => x.s.me).trim();
+	// 다른 사람의 의견 — 고치지 않고 읽는다. 해결하거나 이 쪽 세션에 보낼 수 있다
+	if (pin.by && pin.by !== meName) {
+		return (
+			<div className="pinmark other" style={{ left: pin.x * scale, top: pin.y * scale }} onClick={(e) => e.stopPropagation()}>
+				<button className="dot" onClick={onOpen} aria-label={`${t("pin")} ${n} · ${pin.by}`} title={pin.by}><span>{n}</span></button>
+				{open && (
+					<div className="pin-note" style={flip ? { left: "auto", right: 16 } : undefined}>
+						<div className="by">{pin.by}</div>
+						<p className="txt">{pin.text || "…"}</p>
+						<div className="row">
+							<span className="at">{pin.target?.text || ""}</span>
+							<button onClick={() => { useDeck.getState().resolvePin(pin.id, true); onClose(); }}>{t("resolve")}</button>
+							<button onClick={() => { useDeck.getState().sendPin(pin.id); onClose(); }} title={t("pinSendHint")}>{t("pinSendShort")}</button>
+						</div>
+					</div>
+				)}
+			</div>
+		);
+	}
 	const [text, setText] = useState(pin.text);
 	useEffect(() => setText(pin.text), [pin.text]);
 	const commit = () => { if (text !== pin.text) update(pin.id, text); };

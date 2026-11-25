@@ -99,11 +99,12 @@ export function systemPrompt(s: Settings, deck: Deck) {
 		.join("\n\n");
 }
 
-export interface PinNote { n: number; slide: string; slideNo: number; x: number; y: number; text: string; target?: { tag: string; text: string; path: number[] | null }; shape?: Shape }
+/** by — 의견을 남긴 팀원 (협업). 보낸 사람과 다르면 Claude 에게 누구의 의견인지 알린다 */
+export interface PinNote { n: number; slide: string; slideNo: number; x: number; y: number; text: string; target?: { tag: string; text: string; path: number[] | null }; shape?: Shape; by?: string }
 
 /** 핀 하나를 Claude 가 읽을 글로 — 앱 안 턴의 요청문과 바깥 CLI 의 pins 가 같은 글이다 */
 export const pinLine = (p: PinNote) =>
-	`${p.n}. slide ${p.slideNo} (slides/${p.slide}.html) ` + (p.shape ? describe(p.shape) : `at (${Math.round(p.x)}, ${Math.round(p.y)})`) + (p.target ? ` on <${p.target.tag}>${p.target.text ? ` "${p.target.text}"` : ""}` : "") + `\n   ${p.text.trim() || (p.shape ? "(no comment — look at what this mark shows)" : "(no comment — look at this spot)")}`;
+	`${p.n}. slide ${p.slideNo} (slides/${p.slide}.html) ` + (p.shape ? describe(p.shape) : `at (${Math.round(p.x)}, ${Math.round(p.y)})`) + (p.target ? ` on <${p.target.tag}>${p.target.text ? ` "${p.target.text}"` : ""}` : "") + (p.by ? ` (comment by ${p.by})` : "") + `\n   ${p.text.trim() || (p.shape ? "(no comment — look at what this mark shows)" : "(no comment — look at this spot)")}`;
 
 /** 한 턴의 요청문 — 사용자 글 · @쪽 멘션 · @판 멘션 · 핀 · 지금 보던 쪽. versions 는 versions.ts versionContext 가 만든 줄 */
 export function turnPrompt(text: string, pins: PinNote[], current: { id: string; no: number } | null, attachments: string[], mentions: Mention[] = [], versions: string[] = []) {

@@ -633,3 +633,22 @@ textarea.field { height: auto; padding: 8px 10px; line-height: 1.5; resize: vert
 
 /* 다른 사람이 이 쪽을 방금 손으로 고쳤다 — 무대 위 가운데 (Collab.tsx EditingNote) */
 .editing-note { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 4; padding: 4px 12px; border-radius: 999px; background: var(--raise-2); outline: 1px solid var(--hair-2); box-shadow: var(--shadow); font-size: 12px; color: var(--text); white-space: nowrap; }
+
+/* 의견 — 다른 사람의 핀(읽기 전용)과 대화 머리 「의견 n」 목록 (Collab.tsx CommentsButton) */
+.pinmark.other .dot { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+.pin-note .by { font-size: 11px; color: var(--dim); }
+.pin-note .txt { margin: 2px 0 6px; font-size: 12.5px; white-space: pre-wrap; }
+.talk-comments { font-size: 12px; color: var(--dim); padding: 2px 6px; border-radius: 6px; }
+.talk-comments.has { color: var(--text); }
+.talk-comments:hover { background: var(--hair); }
+.talk-head .collabwrap { position: static; }
+/* 대화 머리 아래 사이드바 폭에 맞춘다 — 단추 자리에서 펴면 사이드바 오른쪽 밖으로 잘렸다 */
+.pop.comments { width: auto; left: 12px; right: 12px; top: calc(100% + 4px); max-height: 60vh; overflow-y: auto; }
+.pop.comments .cm { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid var(--hair); }
+.pop.comments .cm:first-child { border-top: 0; padding-top: 0; }
+.pop.comments .top { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.pop.comments .nm { flex: 1; color: var(--dim); }
+.pop.comments .txt { margin: 0; font-size: 12.5px; white-space: pre-wrap; }
+.pop.comments .acts { display: flex; gap: 8px; }
+.pop.comments .acts button, .pop.comments .more { font-size: 12px; color: var(--dim); }
+.pop.comments .acts button:hover, .pop.comments .more:hover { color: var(--text); }

@@ -16,10 +16,11 @@ import { api, deckUrl, join } from "../lib/api";
 import { ATTACH_EXT, attachName, isImage, useAttach } from "../lib/attach";
 import { useT } from "../lib/i18n";
 import { isVersionQuery, mentionCandidates, mentionTokens, typingMention, versionCandidates, versionTokens } from "../lib/mention";
+import { CommentsButton } from "./Collab";
 import { copyText, openMenu } from "./ContextMenu";
 import { SLIDE_MIME, SlideFrame } from "./Workspace";
 import { useSettings } from "../lib/settings";
-import { routeOf, type Turn, useDeck } from "../lib/store";
+import { isMine, routeOf, type Turn, useDeck } from "../lib/store";
 import { noteDraft } from "../lib/updater";
 import { remote } from "../lib/transport";
 
@@ -87,6 +88,8 @@ export default function Talk() {
 					)}
 					{/* 지금 판 번호는 제목 줄에 있다 — 여기서는 이 대화의 턴 수만 */}
 					{turns.length > 0 && <span className="mono">{turns.length}{t("talkTurns")}</span>}
+					{/* 협업 중이면 덱의 열린 의견 — 누가 · 몇 쪽 · 무엇 (Collab.tsx) */}
+					<CommentsButton />
 					{turns.length > 0 && <button className="talk-new" onClick={() => { setList(false); useDeck.getState().newTalk(); }} title={t("newTalkHint")}>{t("newTalk")}</button>}
 					<button className="talk-fold" onClick={() => useTalkFold.getState().set(true)} aria-expanded={true} title={`${t("talkFold")} (Ctrl+B)`} aria-label={t("talkFold")}>
 						<PanelIcon open />
@@ -320,7 +323,10 @@ const GLYPH = { pen: "〰", arrow: "→", box: "▭" } as const;
 
 function Composer() {
 	const t = useT();
-	const pins = useDeck((s) => s.pins);
+	// 요청칸 위 초안은 내가 꽂은 열린 핀만 — 다른 사람의 의견은 무대 · 의견 목록에 (Collab.tsx)
+	const allPins = useDeck((s) => s.pins);
+	const meName = useSettings((x) => x.s.me).trim();
+	const pins = useMemo(() => allPins.filter((p) => isMine(p, meName)), [allPins, meName]);
 	const deck = useDeck((s) => s.deck)!;
 	// 지금 대화에서 도는 턴 — 멈춤은 이 턴만. 다른 세션이 돌고 있어도 보낼 수 있다(기다리거나 함께 돈다)
 	const myRun = useDeck((s) => (s.talkKey ? s.runs[s.talkKey] : undefined));

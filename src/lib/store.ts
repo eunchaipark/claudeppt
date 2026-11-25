@@ -32,7 +32,10 @@ import { useSettings } from "./settings";
 import { type VersionDiff, diffVersion, restoreSlide as restoreSlideFile, versionContext } from "./versions";
 
 /** 핀 하나 — shape 가 있으면 그어 놓은 표시(펜 · 화살표 · 상자)이고 x, y 는 그 번호 표식 자리다 (markup.ts) */
-export interface Pin { id: string; slide: string; x: number; y: number; text: string; target?: PinNote["target"]; shape?: Shape; at: number }
+/** by — 꽂은 사람 (협업 의견). done — 해결됨 (무대 · 목록에서 감춘다). 바깥 CLI 가 읽는 꼴은 그대로 — 칸만 더했다 */
+export interface Pin { id: string; slide: string; x: number; y: number; text: string; target?: PinNote["target"]; shape?: Shape; at: number; by?: string; done?: boolean }
+/** 내 핀인가 — 요청칸 위 초안 · 보내기에 드는 것은 내가 꽂은 열린 핀만 (다른 사람 의견은 무대 · 의견 목록에) */
+export const isMine = (p: Pin, who: string) => !p.done && (!p.by || p.by === who);
 export interface ToolUse { name: string; file?: string }
 export interface Turn {
 	id: string;
@@ -129,9 +132,14 @@ interface S {
 	duplicateSlide: (i: number) => Promise<void>;
 	moveSlide: (from: number, to: number) => void;
 	removeSlide: (i: number) => void;
-	addPin: (p: Omit<Pin, "id" | "at">) => string;
+	/** by · id — 협업 브라우저 팀원이 꽂은 핀 (그 사람 이름 · 브라우저가 정한 id) */
+	addPin: (p: Omit<Pin, "id" | "at" | "by">, by?: string, id?: string) => string;
 	updatePin: (id: string, text: string) => void;
 	removePin: (id: string) => void;
+	/** 의견 해결 · 다시 열기 */
+	resolvePin: (id: string, done: boolean) => void;
+	/** 의견 하나를 그 쪽의 세션에 보낸다 — 「○○ 님 의견을 반영해 줘」. from 이 없으면 이 기기 사람이 보낸다 */
+	sendPin: (id: string, from?: { by: string; talkKey: string | null }) => Promise<void>;
 	/** force — 앱 밖 Claude Code 가 방금 이 덱을 다뤘어도 보낸다 (알림의 「그래도 보내기」).
 	 *  from — 협업 브라우저 팀원이 보낸 요청 (collab.ts). 보낸 사람 · 그 사람이 보던 쪽 · 그 사람의 지금 대화로 처리하고, 호스트 화면(보는 대화 · 핀)은 건드리지 않는다 */
 	send: (text: string, attachments?: string[], force?: boolean, from?: SendFrom) => Promise<void>;
@@ -404,7 +412,7 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 	if (!deck) return;
 	const deck0 = deck;
 	// 협업 팀원의 요청은 그 사람이 보던 쪽 · 그 사람의 핀으로
-	const pins = from ? from.pins : get().pins;
+	const pins = from ? from.pins : get().pins.filter((p) => isMine(p, me()));
 	const current = from ? Math.max(0, deck.slides.findIndex((x) => x.id === from.current)) : get().current;
 	if (!text.trim() && !pins.length && !attachments.length) return;
 	// 누가 보냈는지 남겨야 한다 — 이름이 없으면 보내지 않는다 (요청칸 위에 이름 칸이 뜬다)
@@ -433,7 +441,8 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 	clearTimeout(directTimer);
 	if (!get().running) await api.commit(dir, tNow("direct"), by).catch(() => {});
 	const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
-	const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
+	// 다른 사람이 남긴 의견이면 Claude 에게 누구의 의견인지 알린다
+	const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape, by: p.by && p.by !== by ? p.by : undefined }));
 	const cur = deck.slides[current];
 	const mentions = mentionsIn(text, deck);
 	const versionMentions = versionMentionsIn(text, get().versions);
@@ -457,7 +466,7 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 	const wait = !!get().runs[key] || waiting.some((w) => w.key === key) || Object.keys(get().runs).length >= MAX_RUNS;
 	const turn: Turn = { id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: wait ? "queued" : "running", by, session: key };
 	// 지금 대화 = 마지막에 쓰인 세션. 팀원의 요청이면 호스트가 보는 대화는 그대로 두고 그 팀원의 핀만 걷는다
-	set(from ? { turns: [...get().turns, turn], pins: get().pins.filter((p) => !pins.includes(p)) } : { turns: [...get().turns, turn], pins: [], talkKey: key });
+	set(from ? { turns: [...get().turns, turn], pins: get().pins.filter((p) => !pins.includes(p)) } : { turns: [...get().turns, turn], pins: get().pins.filter((p) => !pins.includes(p)), talkKey: key });
 	persistPins(dir, get().pins);
 	persistTalk(dir, get());
 	from?.onStart?.({ key, via: route.via, turn: turn.id });
@@ -721,8 +730,8 @@ export const useDeck = create<S>()((set, get) => ({
 		get().setCurrent(Math.min(get().current > i ? get().current - 1 : get().current, deck.slides.length - 2));
 	},
 
-	addPin: (p) => {
-		const pin: Pin = { ...p, id: Math.random().toString(36).slice(2, 9), at: Date.now() };
+	addPin: (p, by = me(), id) => {
+		const pin: Pin = { ...p, id: id && /^[a-z0-9]{4,16}$/.test(id) && !get().pins.some((x) => x.id === id) ? id : Math.random().toString(36).slice(2, 9), at: Date.now(), by: by || undefined };
 		const pins = [...get().pins, pin];
 		set({ pins });
 		persistPins(get().dir, pins);
@@ -737,6 +746,17 @@ export const useDeck = create<S>()((set, get) => ({
 		const pins = get().pins.filter((p) => p.id !== id);
 		set({ pins });
 		persistPins(get().dir, pins);
+	},
+	resolvePin: (id, done) => {
+		const pins = get().pins.map((p) => (p.id === id ? { ...p, done: done || undefined } : p));
+		set({ pins });
+		persistPins(get().dir, pins);
+	},
+	sendPin: async (id, from) => {
+		const p = get().pins.find((x) => x.id === id);
+		if (!p) return;
+		const by = from?.by ?? me();
+		await get().send(tNow("pinSendText").replace("{name}", p.by || by), [], true, { by, current: p.slide, talkKey: from ? from.talkKey : get().talkKey, pins: [p] });
 	},
 
 	send: async (text, attachments = [], force = false, from) => {

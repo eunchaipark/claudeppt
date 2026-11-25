@@ -126,8 +126,9 @@ const handlers: Record<string, (a: Args) => Promise<unknown>> = {
 	pins: async ({ dir, slides, marks }) => {
 		const deck = await readDeck(dir);
 		const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
-		// 번호는 앱 안 턴과 같다 — 꽂은 차례. --slides 로 걸러도 번호는 그대로라 pins --done 에 그대로 쓴다
-		const all: PinNote[] = (await pinsOf(dir)).map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
+		// 번호는 앱 안 턴과 같다 — 꽂은 차례. --slides 로 걸러도 번호는 그대로라 pins --done 에 그대로 쓴다.
+		// 해결된 의견(협업)은 빼고, 팀원이 남긴 의견이면 누구의 것인지 함께 준다
+		const all: PinNote[] = (await pinsOf(dir)).filter((p) => !p.done).map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape, by: p.by }));
 		const want = Array.isArray(slides) ? all.filter((p) => slides.includes(p.slideNo)) : all;
 		// 표시 그림 — 좌표 글만으로는 「어디를 가리키는지」를 자주 잘못 짚는다. 앱 안 턴과 같은 그림을 .claudeppt/attach 에 굽는다
 		const pictures = marks && want.length ? await withDeck(dir, (id, d) => markedPictures(dir, id, d, want)) : [];
@@ -142,6 +143,7 @@ const handlers: Record<string, (a: Args) => Promise<unknown>> = {
 				text: p.text,
 				target: p.target ? { tag: p.target.tag, text: p.target.text } : null,
 				mark: p.shape ? describe(p.shape) : null,
+				by: p.by ?? null,
 			})),
 			text: want.map(pinLine).join("\n"),
 			marks: pictures.map((rel) => join(dir, rel)),
@@ -149,14 +151,16 @@ const handlers: Record<string, (a: Args) => Promise<unknown>> = {
 	},
 
 	unpin: async ({ dir, nums }) => {
-		const all = await pinsOf(dir);
+		const every = await pinsOf(dir);
+		// 번호는 pins 와 같이 열린 의견 차례
+		const all = every.filter((p) => !p.done);
 		const bad = Array.isArray(nums) ? nums.filter((n: number) => n < 1 || n > all.length) : [];
 		if (bad.length) throw new Error(`없는 핀: ${bad.join(", ")} (핀 ${all.length}개)`);
 		const drop = Array.isArray(nums) ? all.filter((_, i) => nums.includes(i + 1)) : all;
 		const st = useDeck.getState();
 		// 화면에 열린 덱은 앱이 핀을 쥐고 있다 — 파일만 고치면 다음 핀 변경 때 앱이 옛 목록으로 덮어쓴다
 		if (same(st.dir, dir)) for (const p of drop) useDeck.getState().removePin(p.id);
-		else await api.writeText(dir, ".claudeppt/pins.json", JSON.stringify(all.filter((p) => !drop.includes(p)), null, 1));
+		else await api.writeText(dir, ".claudeppt/pins.json", JSON.stringify(every.filter((p) => !drop.includes(p)), null, 1));
 		return { removed: drop.length, left: all.length - drop.length };
 	},
 

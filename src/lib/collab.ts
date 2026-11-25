@@ -12,7 +12,7 @@ import { attachable, relFor, useAttach } from "./attach";
 import { call, remote, remoteDeck } from "./transport";
 import { tNow } from "./i18n";
 import { useSettings } from "./settings";
-import { me, nextSession, persistTalk, type Turn, useDeck } from "./store";
+import { isMine, me, nextSession, persistTalk, type Turn, useDeck } from "./store";
 
 export interface Member { conn: number; device: string; name: string; slide: string | null; host: boolean; since: number }
 export interface InviteLink { id: string; url: string; name: string | null; expires: number | null; expired: boolean }
@@ -83,6 +83,7 @@ export async function startHost(): Promise<CollabInfo> {
 		listen<{ id: string; from: { conn: number; name: string }; name: string; args: any }>("collab-intent", (e) => handleIntent(e.payload)),
 	]);
 	await hostListening;
+	watchComments();
 	flush(true);
 	hostView();
 	// 바깥 길 — 깔린 도구가 있으면 켜자마자 연다(같은 링크가 사무실 안 · 밖에서 열리게). 못 열어도 사무실 망으로는 된다
@@ -114,6 +115,26 @@ export const collabTools = () => call<TunnelTools>("collab_tools");
 /** 호스트 화면을 다시 띄웠는데(새로 고침 · 오류 뒤 다시 그림) 서버가 켜져 있으면 다시 붙는다 — 안 붙으면 브라우저가 멈춘 화면을 본다 */
 export async function resumeHost() {
 	if (await call("collab_info").catch(() => null)) await startHost();
+}
+
+/** 받은 의견 알림 — 다른 사람이 핀(의견)을 새로 꽂으면 한 줄 알린다 (호스트 · 브라우저 모두) */
+let pinWatch: (() => void) | null = null;
+function watchComments() {
+	if (pinWatch) return;
+	let known = new Set(useDeck.getState().pins.map((p) => p.id));
+	let deckId = useDeck.getState().id;
+	pinWatch = useDeck.subscribe((s) => {
+		if (s.id !== deckId) { deckId = s.id; known = new Set(s.pins.map((p) => p.id)); return; }
+		const mine = useSettings.getState().s.me.trim();
+		for (const p of s.pins) {
+			if (known.has(p.id)) continue;
+			known.add(p.id);
+			if (p.by && p.by !== mine) {
+				const no = (s.deck?.slides.findIndex((x) => x.id === p.slide) ?? -1) + 1;
+				s.notify(tNow("commentNew").replace("{name}", p.by).replace("{no}", String(no)), "ok");
+			}
+		}
+	});
 }
 
 export async function stopHost() {
@@ -152,7 +173,8 @@ onIntent("send", (from, a) => new Promise((ok, no) => {
 	const d = useDeck.getState();
 	if (!d.deck) return no(new Error(tNow("collabWaiting")));
 	// 바쁘면 거절하지 않는다 — 같은 세션은 앞 턴 뒤에 기다리고, 다른 세션은 함께 돈다 (store sendTurn)
-	const pins = d.pins.filter((p) => Array.isArray(a.pins) && a.pins.includes(p.id));
+	// 그 팀원이 꽂은 열린 핀만 — 남의 의견을 자기 요청에 실어 지우지 못하게
+	const pins = d.pins.filter((p) => Array.isArray(a.pins) && a.pins.includes(p.id) && isMine(p, from.name));
 	// 첨부는 그 팀원이 올린 것(.claudeppt/attach/)만 — 다른 곳의 경로를 적어 보내 Claude 가 읽게 하지 못하게
 	const atts: string[] = (Array.isArray(a.attachments) ? a.attachments : []).filter((x: unknown) => typeof x === "string" && /^\.claudeppt\/attach\/[^\\/]+$/.test(x));
 	let started = false;
@@ -191,6 +213,32 @@ onIntent("direct", async (from, a) => {
 		op.t === "remove";
 	if (typeof a.slideId !== "string" || !okPath || !okOp) throw new Error("bad edit");
 	await d.applyDirect(a.slideId, path, op, from.name || tNow("collabNoName"));
+});
+
+/** 핀 · 의견 — 꽂기 · 고치기 · 지우기는 그 사람 것만, 해결 · 세션에 보내기는 누구나 */
+const pinOf = (id: unknown) => useDeck.getState().pins.find((p) => p.id === id);
+onIntent("pinAdd", async (from, a) => {
+	const ok = typeof a.slide === "string" && Number.isFinite(a.x) && Number.isFinite(a.y) && useDeck.getState().deck?.slides.some((s) => s.id === a.slide);
+	if (!ok) throw new Error("bad pin");
+	return useDeck.getState().addPin({ slide: a.slide, x: a.x, y: a.y, text: String(a.text ?? "").slice(0, 2000), target: a.target, shape: a.shape }, from.name || tNow("collabNoName"), a.id);
+});
+onIntent("pinUpdate", async (from, a) => {
+	const p = pinOf(a.id);
+	if (p && p.by === from.name) useDeck.getState().updatePin(p.id, String(a.text ?? "").slice(0, 2000));
+});
+onIntent("pinRemove", async (from, a) => {
+	const p = pinOf(a.id);
+	if (p && p.by === from.name) useDeck.getState().removePin(p.id);
+});
+onIntent("pinResolve", async (_from, a) => {
+	const p = pinOf(a.id);
+	if (p) useDeck.getState().resolvePin(p.id, !!a.done);
+});
+onIntent("pinSend", async (from, a) => {
+	const p = pinOf(a.id);
+	if (!p) return;
+	// 끝날 때까지 기다리지 않는다 — 턴이 서면 답한다
+	useDeck.getState().sendPin(p.id, { by: from.name || tNow("collabNoName"), talkKey: typeof a.talkKey === "string" ? a.talkKey : null });
 });
 
 onIntent("undo", async (from) => useDeck.getState().undo(from.name || tNow("collabNoName")));
@@ -304,6 +352,7 @@ export function connect() {
 		};
 	};
 	open();
+	watchComments();
 	// 보는 쪽 · 이름이 바뀌면 알린다
 	let cur = -1, deckRef: unknown = null;
 	useDeck.subscribe((s) => { if (s.current !== cur || s.deck !== deckRef) { cur = s.current; deckRef = s.deck; hello(); } });
@@ -335,7 +384,8 @@ function remoteActions() {
 		closeProject: hostOnly,
 		send: async (text: string, attachments: string[] = []) => {
 			const st = useDeck.getState();
-			const r = await intent<{ key: string; via?: number } | null>("send", { text, attachments, pins: [], talkKey: st.talkKey, current: st.deck?.slides[st.current]?.id ?? null }).catch(fail);
+			const mine = st.pins.filter((p) => isMine(p, useSettings.getState().s.me.trim())).map((p) => p.id);
+			const r = await intent<{ key: string; via?: number } | null>("send", { text, attachments, pins: mine, talkKey: st.talkKey, current: st.deck?.slides[st.current]?.id ?? null }).catch(fail);
 			if (!r || !r.key) return;
 			// 보던 대화와 다른 세션(그 쪽을 처음 고친 세션)으로 갔으면 알리고 대화칸을 그리로
 			if (st.talkKey && r.key !== st.talkKey && r.via) d.notify(tNow("routedTo").replace("{no}", String(r.via)).replace("{n}", r.key.slice(1)), "ok");
@@ -361,5 +411,7 @@ function remoteActions() {
 		addPin: (p: any) => { const id = "p" + Date.now().toString(36); intent("pinAdd", { ...p, id }).catch(fail); return id; },
 		updatePin: (id: string, text: string) => { intent("pinUpdate", { id, text }).catch(fail); },
 		removePin: (id: string) => { intent("pinRemove", { id }).catch(fail); },
+		resolvePin: (id: string, done: boolean) => { intent("pinResolve", { id, done }).catch(fail); },
+		sendPin: async (id: string) => { await intent("pinSend", { id, talkKey: useDeck.getState().talkKey }).catch(fail); },
 	};
 }
