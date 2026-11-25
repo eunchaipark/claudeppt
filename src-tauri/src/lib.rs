@@ -14,6 +14,7 @@ mod control;
 mod fonts;
 mod fsx;
 mod imagegen;
+mod invite;
 mod metafile;
 mod project;
 mod pptsnap;
@@ -102,6 +103,10 @@ pub fn run() {
 			collab::collab_publish,
 			collab::collab_reply,
 			collab::collab_view,
+			collab::collab_link_new,
+			collab::collab_link_remove,
+			collab::collab_kick,
+			collab::collab_lock,
 		])
 		.build(tauri::generate_context!())
 		.expect("앱을 띄우지 못했다")

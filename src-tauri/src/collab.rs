@@ -11,11 +11,14 @@
 //   의도       브라우저가 하려는 일(요청 보내기 · 직접 편집 · 의견)은 호스트 화면에 「collab-intent」 사건으로 넘기고 답을 기다린다.
 //              쓰기는 호스트 한 곳에서만 — 두 화면이 같은 파일 · 대화 기록을 따로 쓰면 하나가 다른 것을 덮는다
 //   접속       누가 붙었고 어느 쪽을 보는지(members). 모든 브라우저와 호스트 화면에 알린다
-//   열쇠       켤 때 만드는 토큰. 링크(?k=)로 한 번 들어오면 쿠키로 바꾸고 주소에서 뗀다. 모든 요청에 쿠키나 토큰이 있어야 한다.
-//              IP 로 믿지 않는다 — 바깥 길(터널)로 온 요청은 127.0.0.1 로 보인다.
+//   초대       /j/<링크 열쇠> — 공용 링크는 이름을 한 번 적고, 개인 링크는 정한 이름으로 바로 들어온다. 들어오면 기기 쿠키(HttpOnly)를 받고
+//              그 뒤로는 쿠키로 들어온다. 링크 · 기기 · 잠금은 invite.rs (앱 데이터 collab.json). 내보낸 기기는 그 자리에서 끊긴다.
+//              그 밖의 모든 요청에 기기 쿠키가 있어야 한다. IP 로 믿지 않는다 — 바깥 길(터널)로 온 요청은 127.0.0.1 로 보인다.
+//              팀원의 이름은 서버가 정한다(기기 이름) — 요청 · 편집 · 판의 보낸 사람이 브라우저가 적어 보낸 이름이 아니다.
 //              /_/ws · /_/rpc 는 같은 출처(Origin)에서 온 것만 — 다른 출처 페이지가 팀원 브라우저의 쿠키로 붙지 못하게
 //   읽기       /_/rpc 는 허용 목록뿐 — 열려 있는 덱 안 파일 읽기 · 판 목록. 쓰기 · 절대 경로 · 설정 · claude 실행은 없다
 
+use crate::invite::{self, Book, Why};
 use crate::{AppState, Res, err};
 use axum::Router;
 use axum::body::Body;
@@ -28,13 +31,14 @@ use axum::routing::{get, post};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-const COOKIE: &str = "cppt_k";
+const COOKIE: &str = "cppt_d";
 /// 처음 해 보는 포트 — 쓰이고 있으면 아무 빈 포트
 const DEFAULT_PORT: u16 = 47815;
 /// 의도 하나를 기다리는 가장 긴 시간 — Claude 턴이 오래 돈다
@@ -50,7 +54,10 @@ pub struct Collab {
 
 pub struct Hub {
 	app: AppHandle,
-	token: String,
+	book: Mutex<Book>,
+	book_path: PathBuf,
+	/// 연결 → (기기 id, 그 연결에 보내는 길) — 내보낼 때 끊는다
+	conns: Mutex<HashMap<u64, (String, mpsc::UnboundedSender<String>)>>,
 	/// 슬라이드 주소 안의 열쇠 — 열린 덱 파일 읽기만 된다
 	deck_key: String,
 	port: u16,
@@ -73,27 +80,57 @@ struct Shared {
 #[derive(Clone, Serialize)]
 pub struct Member {
 	conn: u64,
+	/// 기기 id (호스트는 "")
+	device: String,
 	name: String,
 	slide: Option<String>,
 	host: bool,
 	since: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Info {
 	port: u16,
-	token: String,
-	urls: Vec<String>,
+	/// 이 서버에 닿는 주소들 — 사무실 망 · 이 PC (바깥 길은 C2 다음 작업)
+	bases: Vec<String>,
+	links: Vec<LinkView>,
+	devices: Vec<DeviceView>,
+	locked: bool,
 	members: Vec<Member>,
+}
+
+#[derive(Serialize, Clone)]
+struct LinkView {
+	id: String,
+	url: String,
+	name: Option<String>,
+	expires: Option<i64>,
+	expired: bool,
+}
+
+#[derive(Serialize, Clone)]
+struct DeviceView {
+	id: String,
+	name: String,
+	seen: i64,
+	online: bool,
+}
+
+/// 요청을 보낸 기기 — auth 가 쿠키로 찾아 요청에 붙인다
+#[derive(Clone)]
+struct Who {
+	device: String,
+	name: String,
 }
 
 fn now() -> i64 {
 	chrono::Utc::now().timestamp_millis()
 }
 
-/// 같은 길이 · 같은 글자인지 — 글자마다 비교 시간을 같게 (열쇠를 한 글자씩 알아내지 못하게)
-fn same(a: &str, b: &str) -> bool {
-	a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+use invite::same;
+
+fn book_file() -> PathBuf {
+	crate::control::data_dir().join("collab.json")
 }
 
 /// 이 PC 의 사무실 망 주소 — 밖으로 나가는 기본 길의 주소. UDP 는 connect 만으로는 아무것도 보내지 않는다
@@ -106,12 +143,32 @@ fn lan_ip() -> Option<String> {
 
 impl Hub {
 	fn info(&self) -> Info {
-		let mut urls = vec![];
+		let mut bases = vec![];
 		if let Some(ip) = lan_ip() {
-			urls.push(format!("http://{ip}:{}/?k={}", self.port, self.token));
+			bases.push(format!("http://{ip}:{}", self.port));
 		}
-		urls.push(format!("http://localhost:{}/?k={}", self.port, self.token));
-		Info { port: self.port, token: self.token.clone(), urls, members: self.members.lock().unwrap().values().cloned().collect() }
+		bases.push(format!("http://localhost:{}", self.port));
+		let members: Vec<Member> = self.members.lock().unwrap().values().cloned().collect();
+		let b = self.book.lock().unwrap();
+		let t = now();
+		Info {
+			port: self.port,
+			links: b.links.iter().map(|l| LinkView { id: l.id.clone(), url: format!("{}/j/{}", bases[0], l.token), name: l.name.clone(), expires: l.expires, expired: l.expires.is_some_and(|e| e <= t) }).collect(),
+			devices: b.devices.iter().rev().map(|d| DeviceView { id: d.id.clone(), name: d.name.clone(), seen: d.seen, online: members.iter().any(|m| m.device == d.id) }).collect(),
+			locked: b.locked,
+			bases,
+			members,
+		}
+	}
+
+	fn save(&self) {
+		self.book.lock().unwrap().save(&self.book_path);
+	}
+
+	/// 장부가 바뀌었다 — 파일에 남기고 호스트 화면에 알린다
+	fn book_changed(&self) {
+		self.save();
+		let _ = self.app.emit("collab-info", self.info());
 	}
 
 	/// 새로 붙은 브라우저에 줄 지금 상태 통째
@@ -178,7 +235,13 @@ pub async fn collab_start(app: AppHandle) -> Res<Info> {
 	let (tx, _) = broadcast::channel(512);
 	let h = Arc::new(Hub {
 		app: app.clone(),
-		token: uuid::Uuid::new_v4().simple().to_string(),
+		book: Mutex::new({
+			let mut b = Book::load(&book_file());
+			b.ensure_public(now());
+			b
+		}),
+		book_path: book_file(),
+		conns: Mutex::new(HashMap::new()),
 		deck_key: uuid::Uuid::new_v4().simple().to_string(),
 		port,
 		tx,
@@ -195,8 +258,59 @@ pub async fn collab_start(app: AppHandle) -> Res<Info> {
 	let c = app.state::<Collab>();
 	*c.hub.lock().unwrap() = Some(h.clone());
 	*c.stop.lock().unwrap() = Some(stop_tx);
+	h.save();
 	Ok(h.info())
 }
+
+fn with_hub(app: &AppHandle, f: impl FnOnce(&Hub)) -> Res<Info> {
+	let h = hub(app).ok_or("협업이 꺼져 있다")?;
+	f(&h);
+	h.book_changed();
+	Ok(h.info())
+}
+
+/// 링크를 만든다 — name 이 있으면 개인 링크, hours 가 있으면 그 시간 뒤 만료
+#[tauri::command]
+pub fn collab_link_new(app: AppHandle, name: Option<String>, hours: Option<u32>) -> Res<Info> {
+	with_hub(&app, |h| {
+		h.book.lock().unwrap().new_link(name, hours, now());
+	})
+}
+
+/// 링크를 지운다 — 그 링크로 이미 들어온 기기는 그대로 (내보내려면 기기를 내보낸다)
+#[tauri::command]
+pub fn collab_link_remove(app: AppHandle, id: String) -> Res<Info> {
+	with_hub(&app, |h| {
+		let mut b = h.book.lock().unwrap();
+		b.remove_link(&id);
+		b.ensure_public(now());
+	})
+}
+
+/// 기기를 내보낸다 — 붙어 있으면 그 자리에서 끊고, 기기 열쇠를 지워 다시 들어오려면 링크가 있어야 한다
+#[tauri::command]
+pub fn collab_kick(app: AppHandle, device: String) -> Res<Info> {
+	with_hub(&app, |h| {
+		h.book.lock().unwrap().remove_device(&device);
+		for (d, tx) in h.conns.lock().unwrap().values() {
+			if *d == device {
+				let _ = tx.send(json!({ "t": "kicked" }).to_string());
+				let _ = tx.send(CLOSE.into());
+			}
+		}
+	})
+}
+
+/// 회의 잠금 — 켜면 새 기기가 들어오지 못한다
+#[tauri::command]
+pub fn collab_lock(app: AppHandle, on: bool) -> Res<Info> {
+	with_hub(&app, |h| {
+		h.book.lock().unwrap().locked = on;
+	})
+}
+
+/// 연결 안에서만 쓰는 「끊어라」 표시 — 서버가 보내는 말과 겹치지 않는 글
+const CLOSE: &str = "\u{0}close";
 
 /// 끈다 — 붙어 있던 브라우저는 모두 끊긴다
 #[tauri::command]
@@ -206,6 +320,11 @@ pub fn collab_stop(state: State<Collab>) {
 	}
 	if let Some(h) = state.hub.lock().unwrap().take() {
 		let _ = h.tx.send(json!({ "t": "bye" }).to_string().into());
+		// 열린 WebSocket 을 닫는다 — 우아한 종료는 연결이 끝나기를 기다리고, 닫지 않으면 브라우저가 옛 서버에 붙은 채로 남아
+		// 다시 켠 서버에 다시 붙지 못한다
+		for (_, tx) in h.conns.lock().unwrap().values() {
+			let _ = tx.send(CLOSE.into());
+		}
 		for (_, tx) in h.pending.lock().unwrap().drain() {
 			let _ = tx.send(json!({ "ok": false, "error": "stopped" }));
 		}
@@ -239,7 +358,7 @@ pub fn collab_reply(app: AppHandle, id: String, reply: Value) {
 #[tauri::command]
 pub fn collab_view(app: AppHandle, name: String, slide: Option<String>) {
 	if let Some(h) = hub(&app) {
-		h.members.lock().unwrap().insert(0, Member { conn: 0, name, slide, host: true, since: now() });
+		h.members.lock().unwrap().insert(0, Member { conn: 0, device: String::new(), name, slide, host: true, since: now() });
 		h.members_changed();
 	}
 }
@@ -252,6 +371,7 @@ fn routes(h: Arc<Hub>) -> Router {
 		.route("/_/rpc", post(rpc))
 		.route("/_/d/{key}/{*rest}", get(deck))
 		.route("/__rt.js", get(deck_rt))
+		.route("/j/{token}", get(join_page).post(join))
 		.fallback(get(front))
 		.layer(middleware::from_fn_with_state(h.clone(), auth))
 		.layer(tower_http::compression::CompressionLayer::new())
@@ -263,42 +383,101 @@ fn cookie_of(headers: &HeaderMap) -> Option<String> {
 	raw.split(';').map(str::trim).find_map(|c| c.strip_prefix(&format!("{COOKIE}=")).map(String::from))
 }
 
-fn query_of(uri: &Uri, key: &str) -> Option<String> {
-	uri.query()?.split('&').find_map(|kv| kv.strip_prefix(&format!("{key}=")).map(String::from))
-}
 
-/// 열쇠 검사 — 쿠키 또는 ?k=. 링크로 처음 들어온 화면 요청은 쿠키를 심고 주소에서 열쇠를 뗀다
-async fn auth(Ax(h): Ax<Arc<Hub>>, req: Request, next: Next) -> Response {
+/// 기기 쿠키 검사. 찾은 기기를 요청에 붙인다(Who). 초대 링크 · 슬라이드 · 런타임은 저마다 따로 본다
+async fn auth(Ax(h): Ax<Arc<Hub>>, mut req: Request, next: Next) -> Response {
 	let path = req.uri().path();
-	// 슬라이드는 주소 안 덱 열쇠로(처리기가 본다), 런타임은 누구에게나 같은 코드라 열쇠 없이
-	if path.starts_with("/_/d/") || path == "/__rt.js" {
+	// 슬라이드는 주소 안 덱 열쇠로(처리기가 본다), 런타임은 누구에게나 같은 코드라 열쇠 없이, 초대 링크는 링크 열쇠로
+	if path.starts_with("/_/d/") || path == "/__rt.js" || path.starts_with("/j/") {
 		return next.run(req).await;
 	}
 	if (path == "/_/ws" || path == "/_/rpc") && !same_origin(req.headers()) {
 		return StatusCode::FORBIDDEN.into_response();
 	}
-	if cookie_of(req.headers()).is_some_and(|c| same(&c, &h.token)) {
-		return next.run(req).await;
+	let who = cookie_of(req.headers()).and_then(|c| h.book.lock().unwrap().device(&c, now())).map(|d| Who { device: d.id, name: d.name });
+	match who {
+		Some(w) => {
+			req.extensions_mut().insert(w);
+			next.run(req).await
+		}
+		None => page(StatusCode::UNAUTHORIZED, DENIED),
 	}
-	let Some(k) = query_of(req.uri(), "k").filter(|k| same(k, &h.token)) else {
-		return (StatusCode::UNAUTHORIZED, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], DENIED).into_response();
+}
+
+fn page(status: StatusCode, html: &str) -> Response {
+	(status, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], html.to_string()).into_response()
+}
+
+/// 한국어 브라우저인가 — 초대 화면 글을 고른다
+fn korean(headers: &HeaderMap) -> bool {
+	headers.get(header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok()).is_none_or(|l| l.trim_start().starts_with("ko"))
+}
+
+fn refused(headers: &HeaderMap, why: Why) -> Response {
+	let ko = korean(headers);
+	let msg = match (why, ko) {
+		(Why::Expired, true) => "링크가 만료되었습니다. 호스트에게 새 링크를 받아 주세요.",
+		(Why::Expired, false) => "This link has expired. Ask the host for a new one.",
+		(Why::Locked, true) => "호스트가 회의를 잠갔습니다. 지금은 새로 들어올 수 없습니다.",
+		(Why::Locked, false) => "The host locked the meeting. New people can't join right now.",
+		(Why::Unknown, true) => "없는 링크입니다. 호스트에게 링크를 다시 받아 주세요.",
+		(Why::Unknown, false) => "This link doesn't exist. Ask the host for the link again.",
 	};
-	let _ = k;
-	let path = req.uri().path().to_string();
-	if path.starts_with("/_/") {
-		return next.run(req).await;
-	}
-	// 주소창 · 방문 기록에 열쇠가 남지 않게 뗀 주소로 다시 보낸다. SameSite=Lax — 채팅 앱에서 링크를 눌러 들어온 첫 이동에도 쿠키가 붙어야 한다
-	let rest: Vec<&str> = req.uri().query().unwrap_or("").split('&').filter(|kv| !kv.starts_with("k=") && !kv.is_empty()).collect();
-	let to = if rest.is_empty() { path } else { format!("{path}?{}", rest.join("&")) };
+	page(StatusCode::FORBIDDEN, &format!("{HEAD}<p>{msg}</p>"))
+}
+
+const HEAD: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\"><title>ClaudePPT</title><style>body{font:15px system-ui,sans-serif;padding:48px;max-width:420px;margin:auto;color:#222}input,button{font:inherit;padding:8px 10px;border-radius:6px;border:1px solid #bbb}button{background:#222;color:#fff;border:0;margin-left:6px}</style><h2 style=\"font-size:18px\">ClaudePPT</h2>";
+
+fn signed_in(secret: &str) -> Response {
 	let mut r = Response::new(Body::empty());
 	*r.status_mut() = StatusCode::SEE_OTHER;
-	r.headers_mut().insert(header::LOCATION, HeaderValue::from_str(&to).unwrap_or(HeaderValue::from_static("/")));
-	r.headers_mut().insert(header::SET_COOKIE, HeaderValue::from_str(&format!("{COOKIE}={}; HttpOnly; SameSite=Lax; Path=/", h.token)).unwrap());
+	r.headers_mut().insert(header::LOCATION, HeaderValue::from_static("/"));
+	// SameSite=Lax — 채팅 앱에서 링크를 눌러 들어온 첫 이동에도 붙어야 한다. 한 해 동안 기억한다(내보내면 서버에서 지운다)
+	r.headers_mut().insert(header::SET_COOKIE, HeaderValue::from_str(&format!("{COOKIE}={secret}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000")).unwrap());
 	r
 }
 
-const DENIED: &str = "<!doctype html><meta charset=utf-8><title>ClaudePPT</title><body style=\"font:15px system-ui;padding:40px\"><p>초대 링크로 들어와 주세요. 호스트에게 링크를 다시 받아 주세요.</p><p>Please open the invite link again. Ask the host for a new one.</p>";
+/// 초대 링크를 열었다 — 이미 들어온 기기면 바로 화면으로, 개인 링크면 그 이름으로 들어오고, 공용 링크면 이름을 묻는다
+async fn join_page(Ax(h): Ax<Arc<Hub>>, axum::extract::Path(token): axum::extract::Path<String>, headers: HeaderMap) -> Response {
+	if cookie_of(&headers).is_some_and(|c| h.book.lock().unwrap().device(&c, now()).is_some()) {
+		let mut r = Response::new(Body::empty());
+		*r.status_mut() = StatusCode::SEE_OTHER;
+		r.headers_mut().insert(header::LOCATION, HeaderValue::from_static("/"));
+		return r;
+	}
+	let link = match h.book.lock().unwrap().link(&token, now()) {
+		Ok(l) => l.clone(),
+		Err(why) => return refused(&headers, why),
+	};
+	if link.name.is_some() {
+		let (_, secret) = h.book.lock().unwrap().join(&link, "", now());
+		h.book_changed();
+		return signed_in(&secret);
+	}
+	let (q, ph, go) = if korean(&headers) { ("들어가기 전에 이름을 적어 주세요. 요청 · 고친 것에 이 이름이 남습니다.", "이름", "들어가기") } else { ("Enter your name before joining. It is shown on your requests and edits.", "Name", "Join") };
+	page(StatusCode::OK, &format!("{HEAD}<p>{q}</p><form method=post><input name=name placeholder=\"{ph}\" maxlength=40 required autofocus><button>{go}</button></form>"))
+}
+
+#[derive(serde::Deserialize)]
+struct JoinForm {
+	name: String,
+}
+
+/// 공용 링크에서 이름을 적고 들어온다
+async fn join(Ax(h): Ax<Arc<Hub>>, axum::extract::Path(token): axum::extract::Path<String>, headers: HeaderMap, axum::Form(f): axum::Form<JoinForm>) -> Response {
+	let link = match h.book.lock().unwrap().link(&token, now()) {
+		Ok(l) => l.clone(),
+		Err(why) => return refused(&headers, why),
+	};
+	if invite::clean_name(&f.name).is_empty() {
+		return join_page(Ax(h), axum::extract::Path(token), headers).await;
+	}
+	let (_, secret) = h.book.lock().unwrap().join(&link, &f.name, now());
+	h.book_changed();
+	signed_in(&secret)
+}
+
+const DENIED: &str = "<!doctype html><meta charset=utf-8><title>ClaudePPT</title><body style=\"font:15px system-ui;padding:40px\"><p>초대 링크로 들어와 주세요. 호스트에게 링크를 받아 주세요.</p><p>Please open the invite link. Ask the host for one.</p>";
 
 /// 요청을 보낸 페이지가 이 서버에서 온 것인가 — Origin 의 호스트:포트가 Host 와 같아야 한다.
 /// 브라우저는 WebSocket 연결과 POST fetch 에 늘 Origin 을 붙인다. sandbox 슬라이드는 「null」이라 걸린다
@@ -410,15 +589,18 @@ async fn rpc(Ax(h): Ax<Arc<Hub>>, axum::Json(q): axum::Json<Value>) -> Response 
 
 // ── WebSocket ──
 
-async fn ws(Ax(h): Ax<Arc<Hub>>, up: WebSocketUpgrade) -> Response {
-	up.on_upgrade(move |s| conn(h, s))
+async fn ws(Ax(h): Ax<Arc<Hub>>, axum::Extension(who): axum::Extension<Who>, up: WebSocketUpgrade) -> Response {
+	up.on_upgrade(move |s| conn(h, who, s))
 }
 
-async fn conn(h: Arc<Hub>, mut socket: WebSocket) {
+async fn conn(h: Arc<Hub>, who: Who, mut socket: WebSocket) {
 	let id = h.next.fetch_add(1, Ordering::SeqCst);
 	let (direct, mut inbox) = mpsc::unbounded_channel::<String>();
 	let mut rx = h.tx.subscribe();
-	let hello = json!({ "t": "hello", "conn": id, "deckKey": h.deck_key }).to_string();
+	h.conns.lock().unwrap().insert(id, (who.device.clone(), direct.clone()));
+	h.members.lock().unwrap().insert(id, Member { conn: id, device: who.device.clone(), name: who.name.clone(), slide: None, host: false, since: now() });
+	h.members_changed();
+	let hello = json!({ "t": "hello", "conn": id, "deckKey": h.deck_key, "name": who.name }).to_string();
 	if socket.send(Message::Text(hello.into())).await.is_err() || socket.send(Message::Text(h.snapshot().into())).await.is_err() {
 		return;
 	}
@@ -437,27 +619,28 @@ async fn conn(h: Arc<Hub>, mut socket: WebSocket) {
 				Err(broadcast::error::RecvError::Lagged(_)) => { if socket.send(Message::Text(h.snapshot().into())).await.is_err() { break; } }
 				Err(broadcast::error::RecvError::Closed) => break,
 			},
-			d = inbox.recv() => if let Some(s) = d { if socket.send(Message::Text(s.into())).await.is_err() { break; } },
+			d = inbox.recv() => match d {
+				Some(s) if s == CLOSE => { let _ = socket.send(Message::Close(None)).await; break; }
+				Some(s) => { if socket.send(Message::Text(s.into())).await.is_err() { break; } }
+				None => break,
+			},
 		}
 	}
+	h.conns.lock().unwrap().remove(&id);
 	if h.members.lock().unwrap().remove(&id).is_some() {
 		h.members_changed();
 	}
+	let _ = h.app.emit("collab-info", h.info());
 }
 
 fn on_message(h: &Arc<Hub>, conn: u64, direct: &mpsc::UnboundedSender<String>, text: &str) {
 	let Ok(m) = serde_json::from_str::<Value>(text) else { return };
 	match m["t"].as_str().unwrap_or("") {
 		// 이름 · 보는 쪽 — 들어올 때와 쪽을 옮길 때
+		// 보는 쪽 — 이름은 서버가 정한 기기 이름 그대로 (브라우저가 보낸 이름은 쓰지 않는다)
 		"hello" | "view" => {
-			let name = m["name"].as_str().map(|s| s.trim().chars().take(40).collect::<String>());
 			let slide = m["slide"].as_str().map(String::from);
-			{
-				let mut ms = h.members.lock().unwrap();
-				let e = ms.entry(conn).or_insert(Member { conn, name: String::new(), slide: None, host: false, since: now() });
-				if let Some(n) = name.filter(|n| !n.is_empty()) {
-					e.name = n;
-				}
+			if let Some(e) = h.members.lock().unwrap().get_mut(&conn) {
 				e.slide = slide;
 			}
 			h.members_changed();
@@ -469,11 +652,11 @@ fn on_message(h: &Arc<Hub>, conn: u64, direct: &mpsc::UnboundedSender<String>, t
 				let _ = direct.send(json!({ "t": "reply", "id": cid, "ok": false, "error": format!("원격에서는 할 수 없다: {name}") }).to_string());
 				return;
 			}
-			let who = h.members.lock().unwrap().get(&conn).map(|x| x.name.clone()).unwrap_or_default();
+			let (who, device) = h.members.lock().unwrap().get(&conn).map(|x| (x.name.clone(), x.device.clone())).unwrap_or_default();
 			let key = uuid::Uuid::new_v4().simple().to_string();
 			let (tx, rx) = oneshot::channel();
 			h.pending.lock().unwrap().insert(key.clone(), tx);
-			let sent = h.app.emit("collab-intent", json!({ "id": key, "from": { "conn": conn, "name": who }, "name": name, "args": m["args"] }));
+			let sent = h.app.emit("collab-intent", json!({ "id": key, "from": { "conn": conn, "name": who, "device": device }, "name": name, "args": m["args"] }));
 			let (h2, direct) = (h.clone(), direct.clone());
 			tauri::async_runtime::spawn(async move {
 				let reply = if sent.is_err() { json!({ "ok": false, "error": "host" }) } else {
@@ -509,13 +692,10 @@ mod tests {
 	}
 
 	#[test]
-	fn reads_cookie_and_query() {
+	fn reads_cookie() {
 		let mut h = HeaderMap::new();
-		h.insert(header::COOKIE, HeaderValue::from_static("a=1; cppt_k=tok; b=2"));
+		h.insert(header::COOKIE, HeaderValue::from_static("a=1; cppt_d=tok; b=2"));
 		assert_eq!(cookie_of(&h).as_deref(), Some("tok"));
-		let u: Uri = "/x?y=1&k=abc&z=2".parse().unwrap();
-		assert_eq!(query_of(&u, "k").as_deref(), Some("abc"));
-		assert_eq!(query_of(&"/x".parse().unwrap(), "k"), None);
 	}
 
 	#[test]

@@ -12,8 +12,11 @@ import { tNow } from "./i18n";
 import { useSettings } from "./settings";
 import { me, type Turn, useDeck } from "./store";
 
-export interface Member { conn: number; name: string; slide: string | null; host: boolean; since: number }
-export interface CollabInfo { port: number; token: string; urls: string[]; members: Member[] }
+export interface Member { conn: number; device: string; name: string; slide: string | null; host: boolean; since: number }
+export interface InviteLink { id: string; url: string; name: string | null; expires: number | null; expired: boolean }
+export interface Device { id: string; name: string; seen: number; online: boolean }
+/** 서버 정보 — bases: 이 서버에 닿는 주소 · links: 초대 링크 · devices: 링크로 들어온 기기 · locked: 회의 잠금 */
+export interface CollabInfo { port: number; bases: string[]; links: InviteLink[]; devices: Device[]; locked: boolean; members: Member[] }
 
 interface C {
 	/** 호스트: 서버가 켜져 있으면 그 정보 */
@@ -22,10 +25,11 @@ interface C {
 	/** 브라우저: 서버가 준 내 연결 번호 · 붙어 있는가 */
 	conn: number | null;
 	connected: boolean;
-	/** 브라우저: 호스트가 협업을 껐다 */
+	/** 브라우저: 호스트가 협업을 껐다 · 나를 내보냈다 */
 	ended: boolean;
+	kicked: boolean;
 }
-export const useCollab = create<C>()(() => ({ info: null, members: [], conn: null, connected: false, ended: false }));
+export const useCollab = create<C>()(() => ({ info: null, members: [], conn: null, connected: false, ended: false, kicked: false }));
 
 /** 호스트와 브라우저가 함께 쓰는 칸 — 나머지(보는 쪽 · 도구 · 비교 · 알림 · 되돌리기 쌓임)는 보는 사람 몫 */
 const SHARED = ["dir", "id", "deck", "rev", "sessions", "bind", "talkKey", "versions", "releases", "running", "pins"] as const;
@@ -72,6 +76,7 @@ export async function startHost(): Promise<CollabInfo> {
 	useCollab.setState({ info, members: info.members });
 	hostListening ??= Promise.all([
 		listen<Member[]>("collab-members", (e) => useCollab.setState({ members: e.payload })),
+		listen<CollabInfo>("collab-info", (e) => useCollab.setState({ info: e.payload, members: e.payload.members })),
 		listen<{ id: string; from: { conn: number; name: string }; name: string; args: any }>("collab-intent", (e) => handleIntent(e.payload)),
 	]);
 	await hostListening;
@@ -85,6 +90,13 @@ export async function startHost(): Promise<CollabInfo> {
 	});
 	return info;
 }
+
+/** 링크 · 기기 · 잠금 — 호스트 화면의 「설정 › 협업」 */
+const setInfo = (info: CollabInfo) => { useCollab.setState({ info, members: info.members }); return info; };
+export const collabLinkNew = (name: string | null, hours: number | null) => call<CollabInfo>("collab_link_new", { name, hours }).then(setInfo);
+export const collabLinkRemove = (id: string) => call<CollabInfo>("collab_link_remove", { id }).then(setInfo);
+export const collabKick = (device: string) => call<CollabInfo>("collab_kick", { device }).then(setInfo);
+export const collabLock = (on: boolean) => call<CollabInfo>("collab_lock", { on }).then(setInfo);
 
 /** 호스트 화면을 다시 띄웠는데(새로 고침 · 오류 뒤 다시 그림) 서버가 켜져 있으면 다시 붙는다 — 안 붙으면 브라우저가 멈춘 화면을 본다 */
 export async function resumeHost() {
@@ -125,6 +137,7 @@ let seq = 0;
 const waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
 const turnMap = new Map<string, Turn>();
 let retry = 0;
+let kicked = false;
 
 function send(m: unknown) {
 	if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
@@ -184,7 +197,12 @@ export function connect() {
 		ws.onopen = () => { retry = 0; useCollab.setState({ connected: true, ended: false }); hello(); };
 		ws.onmessage = (e) => {
 			const m = JSON.parse(e.data);
-			if (m.t === "hello") { remoteDeck.key = m.deckKey; useCollab.setState({ conn: m.conn }); }
+			if (m.t === "hello") {
+				remoteDeck.key = m.deckKey;
+				useCollab.setState({ conn: m.conn });
+				// 이름은 들어올 때 정한 것(서버가 기기마다 기억) — 요청 · 편집의 보낸 사람도 서버가 이 이름으로 붙인다
+				if (m.name && useSettings.getState().s.me !== m.name) useSettings.getState().set((x) => ({ ...x, me: m.name }));
+			}
 			else if (m.t === "state") apply(m.patch, !!m.full);
 			else if (m.t === "members") useCollab.setState({ members: m.list });
 			else if (m.t === "reply") {
@@ -192,6 +210,8 @@ export function connect() {
 				waiting.delete(m.id);
 				if (w) m.ok ? w.ok(m.value) : w.no(new Error(m.error || "error"));
 			} else if (m.t === "bye") useCollab.setState({ ended: true });
+			// 내보내졌다 — 보던 덱을 걷고 다시 붙지 않는다 (기기 열쇠가 지워져 붙어도 401 이다)
+			else if (m.t === "kicked") { kicked = true; useCollab.setState({ ended: true, kicked: true }); useDeck.setState({ deck: null, turns: [], pins: [] }); }
 		};
 		ws.onclose = () => {
 			ws = null;
@@ -199,7 +219,7 @@ export function connect() {
 			for (const w of waiting.values()) w.no(new Error(tNow("collabOffline")));
 			waiting.clear();
 			// 다시 붙기 — 0.5 · 1 · 2 · 4 … 최대 10초
-			setTimeout(open, Math.min(10000, 500 * 2 ** retry++));
+			if (!kicked) setTimeout(open, Math.min(10000, 500 * 2 ** retry++));
 		};
 	};
 	open();

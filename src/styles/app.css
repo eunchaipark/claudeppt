@@ -617,3 +617,14 @@ textarea.field { height: auto; padding: 8px 10px; line-height: 1.5; resize: vert
 
 /* 협업 브라우저 — 호스트가 덱을 열기 전 · 끊긴 동안 */
 .remote-wait { flex: 1; display: grid; place-items: center; color: var(--dim); font-size: 14px; }
+.collab-sec { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--hair); }
+.collab-set .link-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto; align-items: center; gap: 6px; font-size: 12px; }
+.collab-set .link-row .when { grid-column: 2 / -1; font-size: 11px; margin-top: -4px; }
+.collab-set .link-row.expired .field { opacity: 0.5; text-decoration: line-through; }
+.collab-set .link-row .who { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.collab-set .link-new { display: flex; gap: 6px; }
+.collab-set .link-new .field:first-child { flex: 1; min-width: 0; }
+.collab-set .rm:hover { color: var(--err); }
+.collab-members .nm { flex: 1; min-width: 0; }
+.collab-members .st { font-size: 11px; color: var(--faint); }
+.collab-members .st.on { color: var(--ok); }
