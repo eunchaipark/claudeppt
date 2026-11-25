@@ -61,7 +61,7 @@
 4. `PushNotification` 한 번(무엇이 끝났고 무엇을 봐야 하는지, 200자 안).
 5. 자동 작업 예약(CronDelete)을 지운다.
 
-## 자동 작업 중 알게 된 제약 (2026-11-25 19:15)
+## 자동 작업 중 알게 된 제약 (2026-11-25 18:45)
 
 - fork 에 push 할 때 원본의 `.github/workflows/*` 변경이 든 커밋이 섞이면 거절된다(gh 토큰에 workflow 권한 없음 — `gh auth refresh -s workflow` 는 사용자가 브라우저로 해야 함). 원본 9203878 이 그 커밋이다.
   → collab 과 fix/perf 브랜치는 **fork 의 main(= 원본 0.7.0, c36069a)** 에서 딴다. 원본 PR 은 그대로 a7garden/claudeppt main 으로 (원본 main 과 문서만 달라 PR 에 지장 없음). 사용자가 권한을 주면 fork main 을 동기화하고 collab 에 upstream/main 을 합친다.

@@ -32,7 +32,7 @@
 - master #29 [고장] 바깥 CLI 판 남기기가 바뀐 파일을 잠금 밖에서 센다 — 담당을 걷어내 해당 없음
 - master #30 [성능] activity.jsonl 이 끝없이 커지고 8초마다 통째로 읽힌다 — 담당을 걷어내 해당 없음
 
-## collab #1 — 팀원 세션을 0.7.0 위 collab 줄기로 (18:29 ~ 19:15)
+## collab #1 — 팀원 세션을 0.7.0 위 collab 줄기로 (18:29 ~ 18:44)
 
 - 브랜치: fork `collab` = 원본 0.7.0(c36069a) + 5커밋 `1ea29f4` 담당 걷기 · `52315f7` 장표 세션 · 보낸 사람 · `dda8da1` 세션 목록 · 새 대화 · 보낼 곳 · `0dbdefc` 0.7.0 맞추기 · `b7b7f7b` 보낼 곳 줄이기 + vcs 시험
 - 0.7.0 과 합친 것: 원본이 손본 담당 코드(seats 저장 · wroteAt 등)는 걷음. 첨부(attach)는 살림: 첨부만 있는 요청도 보냄, 턴에 첨부 남김. 보낼 곳을 범위 줄 안 보내기 옆으로(「→ 세션 n」, 까닭은 툴팁). 새 문구에서 긴 대시 걷고 「~습니다」로. 이름 예시 「민지」. PPTX 가져오기 · 내보내기 전 판에도 이름
@@ -45,7 +45,7 @@
 - 확인하지 못한 것: 진짜 Claude 턴(이 작업은 화면 · 라우팅만 바뀌어 가짜로 충분, 앞서 2턴으로 resume 확인함) · 영어 화면 · 좁은 창
 - 사용자 덱 「제목 없음」: 건드리지 않음(마지막 판 fffba4c 그대로)
 
-## collab #2 — 오래 걸리는 명령을 화면 스레드 밖으로 (19:15 ~ 19:50)
+## collab #2 — 오래 걸리는 명령을 화면 스레드 밖으로 (18:44 ~ 18:53)
 
 - 브랜치: `fix/commands-off-main-thread` 0fcfec7 (fork main = 0.7.0 위) → **원본 PR a7garden/claudeppt#4** · collab 에 합침 9320232
 - 바꾼 것
@@ -56,3 +56,18 @@
   - `cargo test --lib` 9개(fix) / 4개(collab) 통과. 새 시험 `user_git_config_does_not_leak_in`: 저장소에 실패하는 pre-commit · commit-msg 훅, showSignature, color.ui=always, fsmonitor 를 켠 채 판 남기기 · 태그 · 목록 · 되돌리기. **격리 줄을 빼면 「blocked」로 실패**하는 것을 확인
   - 개발 실행: 새 시험 덱의 `.git/claudeppt-commit.lock` 을 쥔 채 판 남기기를 부르고 그동안 `fs_exists` 지연을 잼 — **고치기 전 4333ms(잠금 풀 때까지 앱 전체가 멈춤) → 고친 뒤 2~3ms**. 판은 잠금이 풀린 뒤 이어서 남음. fix 브랜치 · collab 둘 다
 - 확인하지 못한 것: release 빌드, 덱 수백 개 라이브러리
+
+## collab #3 — 세션 기록 지키기 · 잃으면 요약으로 잇기 (18:53 ~ 19:06)
+
+- 브랜치: collab `9e0707a` (원본 PR 없음: 장표 세션 구조에 묶인 변경. C5 에서 원본에 맞게 나눌지 정한다)
+- 바꾼 것
+  - 새 세션은 앱이 uuid 를 정해 `--session-id` 로 준다
+  - 턴이 끝나면 `~/.claude/projects/<작업 폴더 이름>/<id>.jsonl` 을 덱 `.claudeppt/sessions/<id>.jsonl` 로 복사(.cppt 에 함께 들어감, 판에는 안 듦)
+  - `--resume` 전에 이 자리에 기록이 없으면 옛 자리(같은 PC 에서 옮긴 덱) 또는 덱에 남긴 것을 놓는다. 이미 있으면 덮지 않는다
+  - 그래도 `No conversation found` 면: 이 세션의 최근 8턴(시킨 사람 · 요청 · 답 · 파일) 요약을 앞에 붙여 새 세션으로 한 번 더, 알림 「세션 n 의 Claude 기록을 찾지 못해…」
+  - 작업 폴더 이름 규칙(실측): 영문 · 숫자가 아닌 UTF-16 단위마다 `-` (`문서` → `--`). 200자 넘는 경로는 Claude 가 줄이고 해시를 붙이므로 놓지 않는다(요약 잇기로 넘어감)
+- 시험
+  - `cargo test --lib` claude 3개: 실측 이름 2개 · 이모지 · id 거르기(`../x` 등) · 남기기/옮긴 덱/다 지운 뒤 되돌리기/더 새것 덮지 않기/이상한 id 로 경로 넘기기 없음
+  - **진짜 Claude 2턴**(시험 동안만 sonnet · low, 끝나고 opus · xhigh 로 되돌림): 1턴의 세션 id = 앱이 정한 uuid · 기록 두 곳(40574바이트) → claude 쪽 기록을 지움(다른 PC 흉내) → 2턴(민수) `--resume` 성공, 답 「은채 님이 1쪽 제목 글자를 「세션 복구 시험」으로 바꿔 달라고 요청했습니다」 — 맥락 · 시킨 사람 유지
+  - 가짜 Claude: resume 이 `No conversation found` 로 실패 → 요약(은채 · 민수 요청과 답, 고친 파일) 붙여 새 id 로 다시 → 턴 「done」, 오류 없음, 알림, 다음 요청은 새 id 로 resume (`shots/c3-recover.png`)
+- 확인하지 못한 것: 실제로 다른 PC 에서 .cppt 를 풀어 잇기(같은 PC 에서 기록을 지워 흉내 냄) · CLAUDE_CONFIG_DIR 을 쓰는 환경

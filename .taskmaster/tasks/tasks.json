@@ -155,14 +155,15 @@
         "id": "3",
         "title": "[C0] 장표 세션 복구 — 이어 받기가 실패해도 그 세션이 먹통이 되지 않게",
         "description": "세션 기록이 없어지면(덱 폴더 이동 · .cppt 풀기) --resume 이 계속 실패한다. master #1 을 장표 세션 구조에 맞춰 고친다.",
-        "details": "claude stderr 의 'No conversation found' 를 잡으면 그 세션의 claude id 를 비우고, 그 세션의 최근 턴 요약(요청자 포함)을 앞에 붙여 한 번 새로 돌린다. 턴이 끝날 때 ~/.claude/projects/<작업 폴더>/<id>.jsonl 을 덱 .claudeppt/sessions/<id>.jsonl 로 복사하고, 덱을 열 때 없으면 되돌려 놓는다(되돌린 뒤 --resume 이 되는지 먼저 실험). 새 세션은 처음부터 --session-id 로 앱이 id 를 정한다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "claude stderr 의 'No conversation found' 를 잡으면 그 세션의 claude id 를 비우고, 그 세션의 최근 턴 요약(요청자 포함)을 앞에 붙여 한 번 새로 돌린다. 턴이 끝날 때 ~/.claude/projects/<작업 폴더>/<id>.jsonl 을 덱 .claudeppt/sessions/<id>.jsonl 로 복사하고, 덱을 열 때 없으면 되돌려 놓는다(되돌린 뒤 --resume 이 되는지 먼저 실험). 새 세션은 처음부터 --session-id 로 앱이 id 를 정한다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:06] collab 9e0707a. 새 세션 --session-id(앱이 uuid) · 턴 끝에 ~/.claude/projects/<key>/<id>.jsonl → 덱 .claudeppt/sessions/ 복사 · --resume 전에 없으면 옛 자리/덱 것을 놓음 · 그래도 No conversation found 면 세션 요약(시킨 사람 포함)을 앞에 붙여 새 세션으로 한 번 더 + 알림. 시험: cargo test 3개(폴더 이름 규칙 실측값 · id 거르기 · 남기기/되돌리기/덮지 않기/경로 넘기기 막기) · 진짜 Claude 2턴(sonnet low): 1턴 id=앱이 정한 uuid, 기록 두 곳 같은 크기 → claude 쪽 기록 지움 → 2턴 resume 성공, 답 「은채 님이 1쪽 제목 글자를 … 바꿔 달라고 요청했습니다」 · 가짜 Claude 로 요약 잇기(요약에 은채/민수 요청 · 답 · 파일, 알림, 다음 요청은 새 id 로 resume)",
         "testStrategy": "가짜 세션 id 로 resume 실패를 만들어 자동 복구되는지(진짜 Claude 1~2턴), jsonl 복사 · 복원 확인",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:06:20.210Z"
       },
       {
         "id": "4",
@@ -349,9 +350,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T09:53:57.329Z",
+      "lastModified": "2026-11-25T10:06:20.065Z",
       "taskCount": 17,
-      "completedCount": 2,
+      "completedCount": 3,
       "tags": [
         "collab"
       ]
