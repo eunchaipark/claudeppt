@@ -10,7 +10,7 @@
 // 그 주소로 받은 HTML 에는 런타임 스크립트가 붙어 온다 — 견주거나 되쓰기 전에 떼어 낸다(stripRt).
 // 2026.11.24 : 「비교」를 PowerPoint 대조에서 판 비교로 바꿨다. PowerPoint 대조는 내보내기 · 릴리즈 뒤 자동 확인으로 옮겼다 (store.ts verifyPptx).
 import { api, type Commit, deckUrl } from "./api";
-import { compare } from "./check";
+import { compare } from "./pixdiff";
 import type { Deck } from "./deck";
 import { ask, offscreen } from "./frames";
 

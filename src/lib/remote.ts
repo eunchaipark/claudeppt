@@ -17,11 +17,9 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { api, bytesFromB64, join } from "./api";
 import { createDeck, type Deck, readDeck } from "./deck";
-import { buildPptx } from "./exportPptx";
 import { freeDir, importDeck } from "./flows";
 import { linkFonts } from "./fonts";
 import { ask, offscreen } from "./frames";
-import { runCheck } from "./check";
 import { tNow } from "./i18n";
 import { fillGenerated } from "./imagegen";
 import { describe, markedPictures } from "./markup";
@@ -220,6 +218,7 @@ const handlers: Record<string, (a: Args) => Promise<unknown>> = {
 	export: async ({ dir, out, exact }) =>
 		withDeck(dir, (id, deck) =>
 			job(`${titleOf(dir, deck)} → PPTX`, async (step) => {
+				const { buildPptx } = await import("./exportPptx");
 				const b = await buildPptx(deck, id, step, !!exact);
 				await api.absWriteBytes(out, b.data);
 				return { out, slides: deck.slides.length, exact: !!exact, missingFonts: b.missingFonts };
@@ -282,6 +281,7 @@ const handlers: Record<string, (a: Args) => Promise<unknown>> = {
 			job(`${titleOf(dir, deck)} · 비교`, async (step) => {
 				const log = await api.log(dir, 1);
 				let k = 0;
+				const { runCheck } = await import("./check");
 				const report = await runCheck(dir, id, deck, log[0]?.n ?? 0, () => step(++k, 0));
 				return { ...report, slides: report.slides.map((x) => ({ ...x, web: join(dir, x.web), ppt: join(dir, x.ppt), diff: join(dir, x.diff) })) };
 			}),

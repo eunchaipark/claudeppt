@@ -2,7 +2,6 @@
 import { api, join } from "./api";
 import { createDeck, readDeck, safeName, writeDeck } from "./deck";
 import { linkFonts } from "./fonts";
-import { importPptx } from "./importPptx";
 import { useSettings } from "./settings";
 import { me, useDeck } from "./store";
 import { tNow } from "./i18n";
@@ -36,6 +35,7 @@ export async function importDeck(path: string, step: (i: number, n: number) => v
 	const name = path.split(/[\\/]/).pop()!.replace(/\.pptx$/i, "");
 	const dir = await freeDir(name);
 	const bytes = new Uint8Array(await api.absReadBytes(path));
+	const { importPptx } = await import("./importPptx");
 	const { deck, warnings } = await importPptx(bytes, path, dir, name, useSettings.getState().s, step);
 	// 글꼴 별칭을 첫 판에 함께 담는다. 2026.11.24 : 열 때만 이어서, 열지 않고 가져온 덱(CLI --no-open)의 쪽 그림 · 내보내기가 대체 글꼴로 가늘게 나왔다
 	await linkFonts(dir, deck).catch(() => {});

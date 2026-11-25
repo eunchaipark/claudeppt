@@ -12,6 +12,7 @@
 // 그래야 남는 차이가 사람 눈에 보이는 차이(빠진 도형 · 다른 색 · 2px 넘게 어긋난 글자)다.
 // 2026.11.17 : Pretendard 덱에서 위치 · 크기 · 줄바꿈이 다 맞은 뒤에도 획 가장자리만으로 0.2~0.3% 가 남아 이 거름을 더했다.
 import { api, deckUrl, join } from "./api";
+import { compare } from "./pixdiff";
 import type { Deck } from "./deck";
 import { type Built, buildPptx, type Locked } from "./exportPptx";
 import { ask, offscreen } from "./frames";
@@ -28,8 +29,6 @@ export interface SlideCheck {
 export interface Report { at: string; version: number; slides: SlideCheck[]; missingFonts: string[] }
 
 const BASE = ".claudeppt/check";
-/** 채널 차이가 이보다 크면 다른 픽셀 */
-const THRESHOLD = 48;
 
 async function load(src: string) {
 	const im = new Image();
@@ -50,52 +49,7 @@ function pixels(im: HTMLImageElement, w: number, h: number) {
 	return g.getImageData(0, 0, w, h).data;
 }
 
-/** 두 그림의 차이 — 다른 픽셀 비율(%)과 빨간 덧칠 그림(data URL) */
-export function compare(a: Uint8ClampedArray, b: Uint8ClampedArray, w: number, h: number) {
-	const out = new ImageData(w, h);
-	const raw = new Uint8Array(w * h);
-	let count = 0;
-	const near = (i: number, x: number, y: number) => {
-		for (let dy = -1; dy <= 1; dy++) {
-			const yy = y + dy;
-			if (yy < 0 || yy >= h) continue;
-			for (let dx = -1; dx <= 1; dx++) {
-				const xx = x + dx;
-				if (xx < 0 || xx >= w) continue;
-				const j = (yy * w + xx) * 4;
-				if (Math.max(Math.abs(a[i] - b[j]), Math.abs(a[i + 1] - b[j + 1]), Math.abs(a[i + 2] - b[j + 2])) <= THRESHOLD) return true;
-			}
-		}
-		return false;
-	};
-	for (let y = 0; y < h; y++) {
-		for (let x = 0; x < w; x++) {
-			const i = (y * w + x) * 4;
-			const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
-			if (d <= THRESHOLD || near(i, x, y)) continue;
-			raw[y * w + x] = 1;
-		}
-	}
-	for (let y = 1; y < h - 1; y++) {
-		for (let x = 1; x < w - 1; x++) {
-			const k = y * w + x;
-			if (!raw[k]) continue;
-			const n = raw[k - w - 1] + raw[k - w] + raw[k - w + 1] + raw[k - 1] + raw[k + 1] + raw[k + w - 1] + raw[k + w] + raw[k + w + 1];
-			if (n <= 4) continue;
-			count++;
-			const i = k * 4;
-			out.data[i] = 232;
-			out.data[i + 1] = 40;
-			out.data[i + 2] = 30;
-			out.data[i + 3] = 220;
-		}
-	}
-	const c = document.createElement("canvas");
-	c.width = w;
-	c.height = h;
-	c.getContext("2d")!.putImageData(out, 0, 0);
-	return { score: Math.round((count / (w * h)) * 10000) / 100, mask: c.toDataURL("image/png") };
-}
+export { compare } from "./pixdiff";
 
 /** 상자들이 덮는 넓이(%) — 8px 칸으로 세어 겹친 곳을 한 번만 센다. 쪽 밖으로 나간 부분은 뺀다 */
 function coverage(boxes: Locked[], w: number, h: number) {
