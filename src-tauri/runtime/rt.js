@@ -301,16 +301,38 @@
 		}
 		return out;
 	};
-	let fontCssP = null;
-	const fontCss = () => (fontCssP ||= (async () => {
+	// 글꼴 — 문서의 @font-face 를 가족 이름별로 모아 두고, 굽는 요소 안 글자가 쓰는 가족만 넣는다. data: 로 바꾸는 것은 처음 쓸 때 한 번.
+	// 2026.11.25 : 전에는 굽기마다 모든 글꼴(덱에 든 Pretendard 만 2MB 넘음)을 통째로 넣어, 글자 없는 그림 · 도형 · 바탕을 구울 때도 SVG 가 몇 MB 였다
+	const famKey = (f) => f.trim().replace(/^["']|["']$/g, "").toLowerCase();
+	let faceList = null;
+	const faces = () => (faceList ||= (() => {
 		const out = [];
 		for (const sh of document.styleSheets) {
 			let rules;
 			try { rules = sh.cssRules; } catch { continue; }
-			for (const r of rules) if (r instanceof CSSFontFaceRule) out.push(await inlineUrls(r.cssText, sh.href || location.href));
+			for (const r of rules) if (r instanceof CSSFontFaceRule) out.push({ fam: famKey(r.style.getPropertyValue("font-family")), src: r.cssText, base: sh.href || location.href, css: null });
+		}
+		return out;
+	})());
+	/** 구운 그림에 그려질 글자가 쓰는 가족 — 얕게 구우면 자식(글자)은 빠지고 ::before · ::after 만 남는다. 글자가 없으면 비어 있다 */
+	const usedFamilies = (el, deep) => {
+		const fams = new Set();
+		const pseudo = (e) => ["::before", "::after"].some((w) => { const c = getComputedStyle(e, w).content; return !!c && c !== "none" && c !== "normal" && !!unquote(c); });
+		for (const e of deep ? [el, ...el.querySelectorAll("*")] : [el]) {
+			const text = deep && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+			if (text || pseudo(e)) for (const f of css(e).fontFamily.split(",")) fams.add(famKey(f));
+		}
+		return fams;
+	};
+	const fontCss = async (fams) => {
+		const out = [];
+		for (const f of faces()) {
+			if (!fams.has(f.fam)) continue;
+			f.css ||= inlineUrls(f.src, f.base);
+			out.push(await f.css);
 		}
 		return out.join("\n");
-	})());
+	};
 	// 논리 속성(inset-inline-start · margin-block-end · inline-size …)은 옮기지 않는다 — 계산 값에는 물리 속성(left · margin-bottom · width)과
 	// 둘 다 들어 있고, 뒤에 오는 논리 속성이 나중에 바꾼 left · width 를 이겨 복제본이 슬라이드 (0,0) 으로 간다.
 	// (2026.11.17 : 다른 요소 안에 놓인 그림 · SVG 가 빈 그림으로 구워진 까닭이었다)
@@ -382,7 +404,8 @@
 		wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
 		wrap.setAttribute("style", `position:relative;width:${S.width}px;height:${S.height}px;overflow:hidden;margin:0;background:transparent`);
 		const st = document.createElement("style");
-		st.textContent = await fontCss();
+		const fams = usedFamilies(el, deep);
+		st.textContent = fams.size ? await fontCss(fams) : "";
 		wrap.append(st, clone);
 		const xml = new XMLSerializer().serializeToString(wrap);
 		const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${box.w}" height="${box.h}" viewBox="${box.x} ${box.y} ${box.w} ${box.h}"><foreignObject x="0" y="0" width="${S.width}" height="${S.height}">${xml}</foreignObject></svg>`;
