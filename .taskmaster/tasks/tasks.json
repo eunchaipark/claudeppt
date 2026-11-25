@@ -53,12 +53,13 @@
         "id": "13",
         "title": "[M4] [성능] EMF 변환 묶음 처리",
         "description": "EMF 한 장마다 PowerShell 을 띄우고 Add-Type 으로 C# 를 새로 컴파일한다(0.85s/장).",
-        "details": "metafile.rs:61-69, importPptx.ts:571-572. Add-Type -OutputAssembly 로 DLL 을 앱 데이터에 한 번 만들기 또는 목록을 한 번에 받는 묶음 명령. 장기: windows crate 로 GDI+ 직접. 미디어는 source/original.pptx 에서 Rust 가 바로 꺼내기(importPptx.ts:819). [0.6.0 재검증] 유효. metafile.rs:62-67, importPptx.ts:572.",
+        "details": "metafile.rs:61-69, importPptx.ts:571-572. Add-Type -OutputAssembly 로 DLL 을 앱 데이터에 한 번 만들기 또는 목록을 한 번에 받는 묶음 명령. 장기: windows crate 로 GDI+ 직접. 미디어는 source/original.pptx 에서 Rust 가 바로 꺼내기(importPptx.ts:819). [0.6.0 재검증] 유효. metafile.rs:62-67, importPptx.ts:572.\n\n[완료 23:47] perf/emf-worker → 원본 PR(13) · collab 같은 변경. PowerShell 일꾼(한 번 컴파일, 줄마다 한 장, 30초 쉬면 끔, base64 경로). 잰 것: EMF 6장 3.5s → 1.1s(첫 장 0.64s, 이후 0.07~0.12s), PNG 바이트 같음. cargo test 새 시험(한글·따옴표 경로, 오류 뒤 유지, 둘째부터 0.4s 안). 하지 않음: 미디어를 Rust 가 zip 에서 바로 꺼내기, GDI+ 직접",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:47:34.810Z"
       },
       {
         "id": "14",
@@ -120,9 +121,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:40:58.820Z",
+      "lastModified": "2026-11-25T14:47:34.595Z",
       "taskCount": 10,
-      "completedCount": 6,
+      "completedCount": 7,
       "tags": [
         "master"
       ]
