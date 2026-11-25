@@ -265,6 +265,27 @@ const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "t
 const nextSession = (list: Session[]): Session => ({ key: "s" + (Math.max(0, ...list.map((x) => Number(x.key.slice(1)) || 0)) + 1), claude: null, at: Date.now() });
 /** 이 기기를 쓰는 팀원 — 판의 작성자로도 남긴다 */
 export const me = () => useSettings.getState().s.me.trim();
+/** 새 Claude 세션 id (--session-id) */
+const uuid = (): string =>
+	crypto.randomUUID?.() ??
+	[...crypto.getRandomValues(new Uint8Array(16))]
+		.map((b, i) => (i === 6 ? (b & 15) | 64 : i === 8 ? (b & 63) | 128 : b).toString(16).padStart(2, "0"))
+		.join("")
+		.replace(/^(.{8})(.{4})(.{4})(.{4})/, "$1-$2-$3-$4-");
+/** 세션 기록을 잃었을 때 새 세션 앞에 붙일 요약 — 이 세션의 최근 요청 · 답 · 고친 파일과 시킨 사람 (오래된 것부터) */
+export function recapOf(turns: Turn[], key: string, skip: string): string {
+	const mine = turns.filter((t) => t.session === key && t.id !== skip && t.status !== "running").slice(-8);
+	if (!mine.length) return "";
+	const cut = (s: string, n: number) => {
+		const one = s.replace(/\s+/g, " ").trim();
+		return one.length > n ? one.slice(0, n) + "…" : one;
+	};
+	const lines = mine.map((t) => {
+		const files = [...new Set(t.tools.map((x) => x.file).filter(Boolean))];
+		return `- ${t.by || "?"}: ${cut(t.request || t.pins.map((p) => p.text).join(" · "), 300)}\n  → ${cut(t.reply || t.error || "", 400)}` + (files.length ? `\n  files: ${files.join(", ")}` : "");
+	});
+	return `The earlier Claude session for these slides could not be restored. Recent requests in this session, oldest first:\n${lines.join("\n")}\n\n`;
+}
 
 /**
  * 이 요청이 갈 세션 — 보내기와 요청칸의 「보낼 곳」 미리보기가 같은 규칙을 쓴다.
@@ -564,17 +585,21 @@ export const useDeck = create<S>()((set, get) => ({
 				const c = get().versions.find((x) => x.hash === v.hash);
 				vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
 			}
-			const r = await api.claudeRun({
-				turn: turn.id,
-				dir,
-				// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
-				prompt: `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines),
-				system: systemPrompt(s, deck),
-				claudePath: s.claude.path,
-				model: s.claude.model,
-				effort: s.claude.effort,
-				resume: session.claude,
-			});
+			// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
+			const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
+			// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
+			const run = (p: string, resume: string | null) =>
+				api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });
+			let r = await run(prompt, session.claude);
+			// 세션 기록을 claude 쪽에서도 덱에서도 찾지 못했다 (기록 없이 옮겨 온 덱 · 지운 기록). 그대로 두면 이 세션을 이을 때마다 실패하고
+			// 장표의 맥락이 끊긴다 — 이 세션의 지난 요청 · 답을 요약해 앞에 붙여 새 Claude 세션으로 한 번 더 돌린다
+			if (session.claude && r.code !== 0 && /No conversation found/i.test(r.stderr) && get().turns.find((t) => t.id === turn.id)?.status !== "stopped") {
+				set({ sessions: get().sessions.map((x) => (x.key === key ? { ...x, claude: null } : x)) });
+				patch((t) => ({ ...t, error: undefined, reply: "", tools: [], cost: undefined, phase: tNow("sessionRecovering") }));
+				r = await run(recapOf(get().turns, key, turn.id) + prompt, null);
+				patch((t) => ({ ...t, phase: undefined }));
+				get().notify(tNow("sessionRecovered").replace("{n}", key.slice(1)), "ok");
+			}
 			const t0 = get().turns.find((t) => t.id === turn.id)!;
 			let status: Turn["status"] = t0.status === "stopped" ? "stopped" : r.code === 0 && !t0.error ? "done" : "failed";
 			if (status === "failed" && !t0.error) patch((t) => ({ ...t, error: r.stderr.trim().split("\n").slice(-3).join("\n") || `exit ${r.code}` }));
