@@ -19,7 +19,7 @@ import { isVersionQuery, mentionCandidates, mentionTokens, typingMention, versio
 import { copyText, openMenu } from "./ContextMenu";
 import { SLIDE_MIME, SlideFrame } from "./Workspace";
 import { useSettings } from "../lib/settings";
-import { type Turn, useDeck } from "../lib/store";
+import { routeOf, type Turn, useDeck } from "../lib/store";
 
 /** 사이드바 접힘 — 보는 사람의 편의라 이 PC 에만 남긴다. seen 은 접을 때 본 마지막 턴(그 뒤 끝난 턴이 「새 답」) */
 interface Fold { folded: boolean; seen: string | null; draft: boolean; set: (v: boolean) => void }
@@ -43,10 +43,15 @@ export function openTalk(focus = true) {
 
 export default function Talk() {
 	const t = useT();
-	const turns = useDeck((s) => s.turns);
+	const all = useDeck((s) => s.turns);
+	const sessions = useDeck((s) => s.sessions);
+	const talkKey = useDeck((s) => s.talkKey);
 	const versions = useDeck((s) => s.versions);
 	const setPreview = useDeck((s) => s.setPreview);
 	const folded = useTalkFold((s) => s.folded);
+	const [list, setList] = useState(false);
+	// 대화칸은 한 세션의 대화만 — 「새 대화」면 빈 대화가 열린다. 세션을 고르면 그 세션의 대화
+	const turns = useMemo(() => (talkKey ? all.filter((x) => (x.session ?? sessions[0]?.key) === talkKey) : all), [all, sessions, talkKey]);
 	const logRef = useRef<HTMLDivElement>(null);
 	const stick = useRef(true);
 	useEffect(() => {
@@ -72,12 +77,19 @@ export default function Talk() {
 			<div className="talk-body" hidden={folded}>
 				<header className="talk-head">
 					<b>{t("talk")}</b>
-					{/* 지금 판 번호는 제목 줄에 있다 — 여기서는 턴 수만 */}
+					{/* 지금 보는 세션 — 누르면 세션 목록 */}
+					{talkKey && (
+						<button className={"talk-sess" + (list ? " on" : "")} onClick={() => setList(!list)} aria-expanded={list} title={t("sessionList")}>
+							{t("sessionN").replace("{n}", talkKey.slice(1))}<span aria-hidden>▾</span>
+						</button>
+					)}
+					{/* 지금 판 번호는 제목 줄에 있다 — 여기서는 이 대화의 턴 수만 */}
 					{turns.length > 0 && <span className="mono">{turns.length}{t("talkTurns")}</span>}
-					{turns.length > 0 && <button className="talk-new" onClick={() => useDeck.getState().newTalk()} title={t("newTalkHint")}>{t("newTalk")}</button>}
+					{turns.length > 0 && <button className="talk-new" onClick={() => { setList(false); useDeck.getState().newTalk(); }} title={t("newTalkHint")}>{t("newTalk")}</button>}
 					<button className="talk-fold" onClick={() => useTalkFold.getState().set(true)} aria-expanded={true} title={`${t("talkFold")} (Ctrl+B)`} aria-label={t("talkFold")}>
 						<PanelIcon open />
 					</button>
+					{list && <SessionList onClose={() => setList(false)} />}
 				</header>
 				<div className="log" ref={logRef} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}>
 					{turns.length === 0 ? (
@@ -166,6 +178,46 @@ function EmptyTalk() {
 	);
 }
 
+/** 세션 목록 — 새 세션이 위. 세션마다 처음 고친 쪽(그 쪽은 그 뒤에도 이 세션이 이어 고친다) · 마지막 요청자 · 때 · 턴 수.
+ *  누르면 그 세션의 대화를 보고, 처음 고치는 쪽은 그 세션으로 간다 */
+function SessionList({ onClose }: { onClose: () => void }) {
+	const t = useT();
+	const sessions = useDeck((s) => s.sessions);
+	const turns = useDeck((s) => s.turns);
+	const bind = useDeck((s) => s.bind);
+	const talkKey = useDeck((s) => s.talkKey);
+	const deck = useDeck((s) => s.deck)!;
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const k = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.(".talk-sess")) onClose(); };
+		const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+		addEventListener("mousedown", k);
+		addEventListener("keydown", esc);
+		return () => { removeEventListener("mousedown", k); removeEventListener("keydown", esc); };
+	}, [onClose]);
+	const pad = (n: number) => String(n).padStart(2, "0");
+	const when = (at: number) => { const d = new Date(at); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+	return (
+		<div className="pop sessions" ref={ref} role="listbox" aria-label={t("sessionList")}>
+			{[...sessions].reverse().map((s) => {
+				const mine = turns.filter((x) => (x.session ?? sessions[0]?.key) === s.key);
+				const last = mine.at(-1);
+				const nos = deck.slides.map((x, i) => (bind[x.id] === s.key ? i + 1 : 0)).filter((n) => n > 0);
+				const on = s.key === talkKey;
+				return (
+					<button key={s.key} role="option" aria-selected={on} className={on ? "on" : ""} onClick={() => { useDeck.getState().viewSession(s.key); onClose(); }}>
+						<span className="s">
+							<b>{t("sessionN").replace("{n}", s.key.slice(1))}</b>
+							<span>{nos.length ? `${nos.join(" · ")}${t("slideN") === "쪽" ? "쪽" : ""}` : t("sessionNoSlides")}</span>
+						</span>
+						<span className="d">{last ? `${last.by ? last.by + " · " : ""}${when(last.at)} · ${mine.length}${t("talkTurns")}` : t("sessionEmpty")}</span>
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
 function TurnView({ turn, head: isHead, onVersion }: { turn: Turn; head: boolean; onVersion: () => void }) {
 	const t = useT();
 	const deck = useDeck((s) => s.deck)!;
@@ -214,11 +266,10 @@ function TurnView({ turn, head: isHead, onVersion }: { turn: Turn; head: boolean
 			{(turn.reply || live) && <div className="reply">{turn.reply}</div>}
 			{turn.error && <div className="err">{turn.error}</div>}
 			{/* 끝줄 — 이 턴이 남긴 판(지금 판은 채움) · 고친 쪽. 도는 중이면 뛰는 점과 지금 하는 일 */}
-			{(live || turn.version || changed || turn.status === "stopped" || turn.phase || turn.session) && (
+			{(live || turn.version || changed || turn.status === "stopped" || turn.phase) && (
 				<div className="foot" title={detail}>
 					{live && <span className="run" aria-label={t("working")} />}
 					{turn.version && <button className={"node" + (isHead ? " head" : "")} onClick={onVersion} title={`${turn.version.short}${turn.cost != null ? ` · $${turn.cost.toFixed(3)}` : ""}`}>v{turn.version.n}</button>}
-					{turn.session && <span className="more" title={t("sessionHint")}>{t("sessionN").replace("{n}", turn.session.slice(1))}</span>}
 					{turn.phase && <span className="phase">{turn.phase}</span>}
 					{changed && <span className="lbl">{t("changedSlides")}</span>}
 					{touched.map((no) => <button key={no} className="mention" onClick={() => setCurrent(no - 1)}>{no}{t("slideN") === "쪽" ? "쪽" : ""}</button>)}
@@ -280,6 +331,10 @@ function Composer() {
 	// 이 기기를 쓰는 팀원 — 정하기 전에는 요청칸 위에 이름 칸이 뜨고 보내기가 막힌다
 	const myName = useSettings((x) => x.s.me).trim();
 	const saveName = (v: string) => { if (v.trim()) useSettings.getState().set((x) => ({ ...x, me: v.trim() })); };
+	// 보낼 곳 — 보내기와 같은 규칙(routeOf). 보고 있는 대화와 다른 세션으로 가면 그 까닭(그 쪽을 처음 고친 세션)을 보인다
+	const bind = useDeck((s) => s.bind);
+	const sessions = useDeck((s) => s.sessions);
+	const talkKey = useDeck((s) => s.talkKey);
 	// 쪽 목록 · 이어 보기에서 쪽을 끌어 요청칸 위에 올린 동안 — 놓으면 @쪽 이 들어간다
 	const [dropping, setDropping] = useState(false);
 	const mentionSlide = useDeck((s) => s.mentionSlide);
@@ -348,6 +403,8 @@ function Composer() {
 		return () => removeEventListener("keydown", k);
 	}, []);
 
+	const route = useMemo(() => routeOf({ deck, current, pins, bind, sessions, talkKey }, text), [deck, current, pins, bind, sessions, talkKey, text]);
+	const routeText = !route.key ? t("routeNew") : (route.via ? t("routeVia").replace("{no}", String(route.via)) : t("routeTalk")).replace("{n}", route.key.slice(1));
 	const can = !running && !!myName && (text.trim() || pins.length || attach.length);
 	const go = () => {
 		if (!can) return;
@@ -394,6 +451,8 @@ function Composer() {
 					))}
 				</div>
 			)}
+			{/* 보낼 곳 — 세션이 생긴 뒤부터. 보고 있는 대화와 다른 세션으로 가면 진하게 */}
+			{sessions.length > 0 && <div className={"route" + (route.key && route.key !== talkKey ? " away" : "")} title={t("sessionHint")}>{routeText}</div>}
 			<div className={"box" + (dropping ? " dropping" : "")} data-drop={t("dropMention")}
 				onDragOver={(e) => { if (!e.dataTransfer.types.includes(SLIDE_MIME)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropping(true); }}
 				onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false); }}

@@ -87,7 +87,8 @@ interface S {
 	sessions: Session[];
 	/** 쪽 id → 그 쪽을 처음 고친 세션 key */
 	bind: Record<string, string>;
-	/** 지금 대화 — 아직 어느 세션도 고치지 않은 쪽에 대한 요청이 가는 세션. 「새 대화」가 바꾼다 */
+	/** 지금 대화 — 대화칸에 보이는 세션이자, 아직 어느 세션도 고치지 않은 쪽에 대한 요청이 가는 세션.
+	 *  마지막에 쓰인 세션 · 「새 대화」로 연 세션 · 세션 목록에서 고른 세션 */
 	talkKey: string | null;
 	running: string | null;
 	versions: Commit[];
@@ -124,8 +125,10 @@ interface S {
 	/** force — 앱 밖 Claude Code 가 방금 이 덱을 다뤘어도 보낸다 (알림의 「그래도 보내기」) */
 	send: (text: string, attachments?: string[], force?: boolean) => Promise<void>;
 	stop: () => void;
-	/** 새 세션을 열어 지금 대화로 삼는다 */
+	/** 새 세션을 열어 지금 대화로 삼는다 — 대화칸이 빈 새 대화가 된다 */
 	newTalk: () => void;
+	/** 그 세션의 대화를 본다 — 지금 대화가 된다 (처음 고치는 쪽이 이 세션으로 간다) */
+	viewSession: (key: string) => void;
 	applyDirect: (slideId: string, path: number[] | null, op: Op) => Promise<void>;
 	/** 손으로 고친 것(끌기 · 방향키 이동 · 글 고치기 · 지우기)을 한 걸음 되돌린다 (Ctrl+Z) · 다시 한다 (Ctrl+Y) */
 	undo: () => Promise<void>;
@@ -262,6 +265,24 @@ const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "t
 const nextSession = (list: Session[]): Session => ({ key: "s" + (Math.max(0, ...list.map((x) => Number(x.key.slice(1)) || 0)) + 1), claude: null, at: Date.now() });
 /** 이 기기를 쓰는 팀원 — 판의 작성자로도 남긴다 */
 const me = () => useSettings.getState().s.me.trim();
+
+/**
+ * 이 요청이 갈 세션 — 보내기와 요청칸의 「보낼 곳」 미리보기가 같은 규칙을 쓴다.
+ * 요청이 가리키는 쪽(@쪽 → 핀을 꽂은 쪽 → 지금 보는 쪽)을 처음 고친 세션이 있으면 그 세션을 잇는다 — 다른 팀원이 쓰던 세션이어도.
+ * 처음 보는 쪽이면 지금 대화(마지막에 쓰인 세션 · 「새 대화」로 연 세션). 세션이 하나도 없으면 key 가 null — 보낼 때 새로 연다.
+ * via 는 세션을 정한 쪽의 번호 (지금 대화로 가면 없음)
+ */
+export function routeOf(st: Pick<S, "deck" | "current" | "pins" | "bind" | "sessions" | "talkKey">, text: string): { key: string | null; via?: number } {
+	const deck = st.deck;
+	if (!deck) return { key: null };
+	const mentions = mentionsIn(text, deck);
+	const cur = deck.slides[st.current];
+	const targets = mentions.length ? mentions.map((m) => m.id) : st.pins.length ? st.pins.map((p) => p.slide) : cur ? [cur.id] : [];
+	const live = (k?: string) => !!k && st.sessions.some((x) => x.key === k);
+	const hit = targets.find((id) => live(st.bind[id]));
+	if (hit) return { key: st.bind[hit], via: deck.slides.findIndex((x) => x.id === hit) + 1 };
+	return { key: live(st.talkKey ?? undefined) ? st.talkKey : null };
+}
 const readJson = async <T,>(dir: string, rel: string, d: T): Promise<T> => {
 	try { return JSON.parse(await api.readText(dir, rel)); } catch { return d; }
 };
@@ -512,20 +533,21 @@ export const useDeck = create<S>()((set, get) => ({
 		const cur = deck.slides[current];
 		const mentions = mentionsIn(text, deck);
 		const versionMentions = versionMentionsIn(text, get().versions);
-		// 세션 고르기 — 이 요청이 가리키는 쪽(@쪽 → 핀을 꽂은 쪽 → 지금 보는 쪽)을 처음 고친 세션이 있으면 그 세션을 잇는다.
-		// 다른 팀원이 쓰던 세션이어도 그대로 — 그 쪽의 맥락이 그 세션에 있다. 처음 보는 쪽이면 지금 대화로
-		const targets = mentions.length ? mentions.map((m) => m.id) : notes.length ? notes.map((n) => n.slide) : cur ? [cur.id] : [];
+		// 세션 고르기 (routeOf). 보고 있던 대화와 다른 세션으로 가면 알리고, 대화칸도 그 세션으로 옮긴다 — 보낸 요청이 보이게
+		const route = routeOf(get(), text);
 		let { sessions } = get();
-		let key = targets.map((id) => get().bind[id]).find((k) => !!k && sessions.some((x) => x.key === k)) ?? get().talkKey;
-		if (!key || !sessions.some((x) => x.key === key)) {
+		let key = route.key;
+		if (!key) {
 			const ns = nextSession(sessions);
 			sessions = [...sessions, ns];
 			key = ns.key;
-			set({ sessions, talkKey: key });
+			set({ sessions });
 		}
+		if (get().talkKey && key !== get().talkKey && route.via) get().notify(tNow("routedTo").replace("{no}", String(route.via)).replace("{n}", key.slice(1)), "ok");
 		const session = sessions.find((x) => x.key === key)!;
 		const turn: Turn = { id: "t" + Date.now().toString(36), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: "running", by, session: key };
-		set({ turns: [...get().turns, turn], running: turn.id, pins: [] });
+		// 지금 대화 = 마지막에 쓰인 세션
+		set({ turns: [...get().turns, turn], running: turn.id, pins: [], talkKey: key });
 		persistPins(dir, []);
 		const patch = (fn: (t: Turn) => Turn) => set({ turns: get().turns.map((t) => (t.id === turn.id ? fn(t) : t)) });
 
@@ -589,6 +611,13 @@ export const useDeck = create<S>()((set, get) => ({
 		if (ns !== cur) set({ sessions: [...sessions, ns], talkKey: ns.key });
 		persistTalk(dir, get());
 		get().notify(tNow("newTalkDone").replace("{n}", ns.key.slice(1)), "ok");
+	},
+
+	viewSession: (key) => {
+		const { dir, sessions } = get();
+		if (!dir || !sessions.some((x) => x.key === key)) return;
+		set({ talkKey: key });
+		persistTalk(dir, get());
 	},
 
 	stop: () => {
