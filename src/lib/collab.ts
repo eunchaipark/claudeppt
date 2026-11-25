@@ -35,7 +35,7 @@ interface C {
 export const useCollab = create<C>()(() => ({ info: null, members: [], conn: null, connected: false, ended: false, kicked: false }));
 
 /** 호스트와 브라우저가 함께 쓰는 칸 — 나머지(보는 쪽 · 도구 · 비교 · 알림 · 되돌리기 쌓임)는 보는 사람 몫 */
-const SHARED = ["dir", "id", "deck", "rev", "sessions", "bind", "talkKey", "versions", "releases", "running", "pins"] as const;
+const SHARED = ["dir", "id", "deck", "rev", "sessions", "bind", "talkKey", "versions", "releases", "running", "pins", "editing", "histBy"] as const;
 type Key = (typeof SHARED)[number];
 
 // ── 호스트 ──
@@ -178,6 +178,23 @@ onIntent("newTalk", async (_from, a) => {
 	return { key: ns.key };
 });
 
+/** 직접 편집 — 글자 고치기 · 끌어 옮기기 · 지우기. 호스트가 한 줄(serial)로 받아 원본에 쓰고, 판 작성자 · 되돌리기 걸음에 그 팀원 이름을 단다 */
+onIntent("direct", async (from, a) => {
+	const d = useDeck.getState();
+	const op = a.op ?? {};
+	const path = a.path;
+	const okPath = path === null || (Array.isArray(path) && path.length < 64 && path.every((n: unknown) => Number.isInteger(n) && (n as number) >= 0));
+	const okOp =
+		(op.t === "edit" && typeof op.html === "string" && op.html.length < 200_000) ||
+		(op.t === "patch" && op.style && typeof op.style === "object" && Object.values(op.style).every((v) => typeof v === "string")) ||
+		op.t === "remove";
+	if (typeof a.slideId !== "string" || !okPath || !okOp) throw new Error("bad edit");
+	await d.applyDirect(a.slideId, path, op, from.name || tNow("collabNoName"));
+});
+
+onIntent("undo", async (from) => useDeck.getState().undo(from.name || tNow("collabNoName")));
+onIntent("redo", async (from) => useDeck.getState().redo(from.name || tNow("collabNoName")));
+
 /** 첨부 올리기 — 그림 · PDF · 글만, 10MB 까지. 덱의 .claudeppt/attach/ 에 쓰고 그 경로를 돌려준다 */
 onIntent("upload", async (_from, a) => {
 	const { dir } = useDeck.getState();
@@ -232,6 +249,8 @@ function apply(patch: any, full: boolean) {
 		}
 		next[k] = v;
 	}
+	// 되돌리기 걸음 수는 사람마다 — 내 것만 제목 줄 단추에
+	if (next.histBy) next.hist = (next.histBy as Record<string, { u: number; r: number }>)[useSettings.getState().s.me.trim()] ?? { u: 0, r: 0 };
 	if (patch.turns) {
 		for (const t of patch.turns.put ?? []) turnMap.set(t.id, t);
 		const order: string[] = patch.turns.order ?? st.turns.map((t: Turn) => t.id);

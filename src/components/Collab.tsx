@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { collabKick, collabLinkNew, collabLinkRemove, collabLock, collabTools, collabTunnel, type InviteLink, type TunnelTools, type Member, startHost, stopHost, useCollab } from "../lib/collab";
 import { useT } from "../lib/i18n";
+import { useSettings } from "../lib/settings";
 import { useDeck } from "../lib/store";
 import { remote } from "../lib/transport";
 import { copyText } from "./ContextMenu";
@@ -39,6 +40,22 @@ export function SlideFaces({ slideId }: { slideId: string }) {
 			{others.length > 3 && <i className="face sm more">+{others.length - 3}</i>}
 		</span>
 	);
+}
+
+/** 무대 위 — 이 쪽을 다른 사람이 방금(8초 안) 손으로 고쳤으면 「○○ 님이 고치는 중」. 같은 요소를 둘이 고치면 나중 것이 남는다 */
+export function EditingNote({ slideId }: { slideId: string }) {
+	const t = useT();
+	const e = useDeck((s) => s.editing[slideId]);
+	const mine = useSettings((s) => s.s.me.trim());
+	const [, tick] = useState(0);
+	const fresh = !!e && e.by !== mine && Date.now() - e.at < 8000;
+	useEffect(() => {
+		if (!fresh) return;
+		const id = setTimeout(() => tick((n) => n + 1), 8000 - (Date.now() - e!.at) + 50);
+		return () => clearTimeout(id);
+	}, [fresh, e?.at]);
+	if (!fresh) return null;
+	return <div className="editing-note" role="status">{t("collabEditing").replace("{name}", e!.by)}</div>;
 }
 
 /** 무대 위 — 이 쪽을 함께 보는 사람 · 다른 쪽을 보는 사람(누르면 그 쪽으로) */

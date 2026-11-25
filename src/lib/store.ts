@@ -98,6 +98,10 @@ interface S {
 	preview: Commit | null;
 	/** 되돌릴 수 있는 걸음 수 · 다시 할 수 있는 걸음 수 — 제목 줄 단추가 켜고 끈다 */
 	hist: { u: number; r: number };
+	/** 협업: 사람마다 되돌릴 수 있는 걸음 수 (브라우저 팀원의 제목 줄 단추) */
+	histBy: Record<string, { u: number; r: number }>;
+	/** 협업: 쪽마다 마지막으로 손으로 고친 사람 · 때 — 「○○ 님이 고치는 중」 */
+	editing: Record<string, { by: string; at: number }>;
 	busy: string | null;
 	/** busy 와 달리 화면을 막지 않는 일. 프로젝트를 닫아도 남는다 */
 	jobs: Job[];
@@ -132,10 +136,11 @@ interface S {
 	newTalk: () => void;
 	/** 그 세션의 대화를 본다 — 지금 대화가 된다 (처음 고치는 쪽이 이 세션으로 간다) */
 	viewSession: (key: string) => void;
-	applyDirect: (slideId: string, path: number[] | null, op: Op) => Promise<void>;
-	/** 손으로 고친 것(끌기 · 방향키 이동 · 글 고치기 · 지우기)을 한 걸음 되돌린다 (Ctrl+Z) · 다시 한다 (Ctrl+Y) */
-	undo: () => Promise<void>;
-	redo: () => Promise<void>;
+	/** by — 고친 사람 (협업 브라우저 팀원이면 그 이름, 없으면 이 기기의 이름) */
+	applyDirect: (slideId: string, path: number[] | null, op: Op, by?: string) => Promise<void>;
+	/** 손으로 고친 것(끌기 · 방향키 이동 · 글 고치기 · 지우기)을 한 걸음 되돌린다 (Ctrl+Z) · 다시 한다 (Ctrl+Y). by 의 걸음만 */
+	undo: (by?: string) => Promise<void>;
+	redo: (by?: string) => Promise<void>;
 	refreshVersions: () => Promise<void>;
 	setPreview: (c: Commit | null) => void;
 	restore: (c: Commit) => Promise<void>;
@@ -165,12 +170,19 @@ let directTimer: ReturnType<typeof setTimeout> | undefined;
 // 되돌리기 — 손으로 고치기 전의 슬라이드 파일 글을 쌓는다. 파일을 통째로 되쓰면 감시가 쪽을 다시 그린다.
 // Claude 턴 · 판 되돌리기 · 다른 덱 열기 때 비운다 — 그 뒤에 옛 글을 되쓰면 Claude 가 고친 것이 함께 사라진다.
 // Claude 의 턴 자체는 「판」으로 되돌린다
-type Snap = { file: string; text: string };
+// 협업: 걸음마다 고친 사람(by)을 단다 — 되돌리기는 사람마다 제 것만 (팀원의 Ctrl+Z 가 다른 사람이 고친 것을 걷지 않게)
+// 협업: after 는 그 걸음 직후의 파일 글 — 되돌릴 때 파일이 아직 그 글이어야 되쓴다. 그 사이 다른 사람이 같은 쪽을 고쳤으면
+// 파일을 통째로 되쓰면 그 사람이 고친 것까지 사라진다 (2026.11.25 협업 시험에서 찾음) — 그때는 되돌리지 않고 알린다
+type Snap = { file: string; text: string; after: string | null; by: string };
 let undoStack: Snap[] = [];
 let redoStack: Snap[] = [];
 const UNDO_MAX = 100;
 // 쌓임은 모듈 변수라 화면이 모른다 — 바뀔 때마다 걸음 수를 상태로 알린다
-const syncHist = () => useDeck.setState({ hist: { u: undoStack.length, r: redoStack.length } });
+const histOf = (by: string) => ({ u: undoStack.filter((x) => x.by === by).length, r: redoStack.filter((x) => x.by === by).length });
+const syncHist = () => {
+	const names = new Set([...undoStack, ...redoStack].map((x) => x.by));
+	useDeck.setState({ hist: histOf(me()), histBy: Object.fromEntries([...names].map((n) => [n, histOf(n)])) });
+};
 const clearUndo = () => { undoStack = []; redoStack = []; syncHist(); };
 // 손 편집 · 되돌리기는 한 줄로 차례대로 돈다 — 방향키 이동을 쓰는 중에 Ctrl+Z 가 같은 파일을 읽고 쓰면 하나가 다른 것을 덮는다
 let queue: Promise<unknown> = Promise.resolve();
@@ -216,32 +228,52 @@ function verifyPptx(get: () => S, deck: Deck, built: Built) {
 }
 
 /** 손으로 고친 것은 몇 번이고 이어서 하므로 잠잠해지면 한 판으로 묶는다. 그새 턴이 돌면 끝난 뒤로 미룬다 */
-function directCommit(dir: string, get: () => S) {
+/** 잠잠해지기 전까지 손으로 고친 사람들 — 그 판의 작성자 */
+let directBy = new Set<string>();
+function directCommit(dir: string, get: () => S, by: string) {
 	clearTimeout(directTimer);
+	directBy.add(by);
 	const flush = async () => {
 		if (get().dir !== dir) return;
 		if (get().running) { directTimer = setTimeout(flush, 2000); return; }
-		await api.commit(dir, tNow("direct"), me()).catch(() => null);
+		const authors = [...directBy].filter(Boolean).join(" · ");
+		directBy = new Set();
+		await api.commit(dir, tNow("direct"), authors || me()).catch(() => null);
 		get().refreshVersions();
 	};
 	directTimer = setTimeout(flush, 4000);
 }
 
 /** from 에서 하나 꺼내 그 파일을 되쓰고, 지금 글은 to 에 쌓는다 — undo · redo 가 같은 길을 반대로 쓴다 */
-async function step(get: () => S, from: Snap[], to: Snap[]) {
+async function step(get: () => S, from: Snap[], to: Snap[], by: string) {
 	const { dir, deck } = get();
 	if (!dir || !deck || get().preview) return;
 	if (get().running) return get().notify(tNow("working"), "err");
-	const snap = from.pop();
-	if (!snap) return;
+	// 이 사람의 마지막 걸음 — 다른 사람의 걸음은 건너뛴다
+	const k = from.map((x) => x.by).lastIndexOf(by);
+	if (k < 0) return;
+	const [snap] = from.splice(k, 1);
 	const now = await api.readText(dir, snap.file).catch(() => null);
+	if (snap.after != null && now !== snap.after) {
+		syncHist();
+		const msg = tNow("undoBlocked");
+		if (by !== me()) throw new Error(msg);
+		return get().notify(msg, "err");
+	}
 	await api.writeText(dir, snap.file, snap.text);
-	if (now != null) to.push({ file: snap.file, text: now });
+	if (now != null) to.push({ file: snap.file, text: now, after: snap.text, by });
 	syncHist();
-	// 되돌린 쪽이 다른 쪽이면 그 쪽으로 간다 — 보이지 않는 곳에서 바뀌면 되돌렸는지 알 수 없다
+	// 되돌린 쪽이 다른 쪽이면 그 쪽으로 간다 — 보이지 않는 곳에서 바뀌면 되돌렸는지 알 수 없다 (호스트 화면만 — 팀원의 되돌리기로 호스트가 보는 쪽이 넘어가지 않게)
 	const i = deck.slides.findIndex((x) => x.file === snap.file);
-	if (i >= 0 && i !== get().current) get().setCurrent(i);
-	directCommit(dir, get);
+	if (by === me() && i >= 0 && i !== get().current) get().setCurrent(i);
+	markEditing(get, deck.slides[i]?.id, by);
+	directCommit(dir, get, by);
+}
+
+/** 이 쪽을 지금 손으로 고친 사람 — 협업 화면이 「○○ 님이 고치는 중」을 보인다 */
+function markEditing(get: () => S, slideId: string | undefined, by: string) {
+	if (!slideId) return;
+	useDeck.setState({ editing: { ...get().editing, [slideId]: { by, at: Date.now() } } });
 }
 
 /** 앱 밖 Claude Code 의 마지막 명령 뒤 이 시간 안이면 그 덱에서 보내기 전에 묻는다.
@@ -454,6 +486,8 @@ export const useDeck = create<S>()((set, get) => ({
 	releases: [],
 	preview: null,
 	hist: { u: 0, r: 0 },
+	histBy: {},
+	editing: {},
 	busy: null,
 	jobs: [],
 	toast: null,
@@ -675,25 +709,31 @@ export const useDeck = create<S>()((set, get) => ({
 		api.claudeStop(r);
 	},
 
-	applyDirect: (slideId, path, op) => serial(async () => {
+	applyDirect: (slideId, path, op, by = me()) => serial(async () => {
 		const { dir, deck } = get();
 		const ref = deck?.slides.find((s) => s.id === slideId);
 		if (!ref) return;
 		// Claude 가 파일을 고치는 중에는 화면의 요소 번호 길이 원본과 어긋날 수 있다 — 받지 않는다
-		if (get().running) return get().notify(tNow("working"), "err");
+		if (get().running) {
+			if (by !== me()) throw new Error(tNow("working"));
+			return get().notify(tNow("working"), "err");
+		}
 		const before = await api.readText(dir, ref.file).catch(() => null);
 		if (!(await applyOp(dir, ref.file, path, op))) return;
 		if (before != null) {
-			undoStack.push({ file: ref.file, text: before });
+			const after = await api.readText(dir, ref.file).catch(() => null);
+			undoStack.push({ file: ref.file, text: before, after, by });
 			if (undoStack.length > UNDO_MAX) undoStack.shift();
-			redoStack = [];
+			// 새로 고치면 그 사람의 「다시 하기」만 버린다
+			redoStack = redoStack.filter((x) => x.by !== by);
 			syncHist();
 		}
-		directCommit(dir, get);
+		markEditing(get, slideId, by);
+		directCommit(dir, get, by);
 	}),
 
-	undo: () => serial(() => step(get, undoStack, redoStack)),
-	redo: () => serial(() => step(get, redoStack, undoStack)),
+	undo: (by = me()) => serial(() => step(get, undoStack, redoStack, by)),
+	redo: (by = me()) => serial(() => step(get, redoStack, undoStack, by)),
 
 	refreshVersions: async () => {
 		const { dir } = get();

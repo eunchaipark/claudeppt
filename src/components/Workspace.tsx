@@ -17,7 +17,7 @@ import { type Pin, useDeck } from "../lib/store";
 import { type MenuItem, openMenu } from "./ContextMenu";
 import { VersionBar, VersionLens } from "./VersionLens";
 import { SketchBoard } from "./Sketch";
-import { SlideFaces, StageFaces } from "./Collab";
+import { EditingNote, SlideFaces, StageFaces } from "./Collab";
 import { remote } from "../lib/transport";
 import Talk, { useTalkFold } from "./Talk";
 
@@ -445,6 +445,7 @@ function Stage() {
 		<section className="stage" data-mode={preview ? "view" : mode} aria-label={t("slides")}>
 			<div className="stage-banner">
 				<StageFaces slideId={slide.id} />
+				<EditingNote slideId={slide.id} />
 				{compare && <VersionBar slideId={slide.id} />}
 				{preview && (
 					<div className="past" role="status">
