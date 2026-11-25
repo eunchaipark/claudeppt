@@ -259,3 +259,10 @@
 - 바꾼 것: 다 쓴 PPTX 를 한 번 열어(tidyZip) 도형 묶기 + 같은 그림(SHA-1 · 크기) 한 파일로 합치기 · 다시 묶을 때 그림은 STORE. 손본 것이 없으면 그대로
 - 잰 것: 1.76MB 그림이 세 쪽에 든 덱 **5.77MB → 2.20MB** · rels 대상 59개 모두 있음 · **PowerPoint 로 열어** 세 쪽에 그림 하나씩 그대로 · 시간 비슷(1.3초)
 - 범위를 줄임(하지 않음): 효과 없는 <img> 원본 바이트 + crop · extract/snapshot 을 한 iframe 에서 · check 픽셀 비교를 Worker 로 · 그림 생성 동시 2~3개 — 바꾸는 곳이 넓고 효과는 덱마다 달라 다음 작업으로 남김
+
+## master #17 — Rust 중복 의존성 (~ 23:59)
+
+- 브랜치: `chore/rust-dup-deps` → **원본 PR a7garden/claudeppt#15** · collab 에는 sha2 0.10 → 0.11 도
+- 바꾼 것: zip 2 → 9 · dirs 6 → 7 · base64 0.22 → 0.23 (tauri · 업데이터가 쓰는 판). zip 9 의 `name()` 이 Result — 글꼴 zip 의 읽히지 않는 이름은 건너뜀
+- **reqwest 는 그대로(0.12)**: 0.13 은 rustls 암호 공급자를 따로 설치해야 하는데 그림 생성 HTTPS(OpenAI · Gemini) 길을 키 없이 시험할 수 없어서
+- 확인: cargo test(collab 24 · 원본 8) · .cppt 묶기 → 풀기 왕복 파일 125개 바이트 같음 · 판 이력 12 그대로 · sha2 0.11 로도 저장된 기기 해시로 민수가 들어옴

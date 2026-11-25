@@ -88,12 +88,13 @@
         "id": "17",
         "title": "[M0] [업그레이드] Rust 중복 의존성 정리",
         "description": "reqwest 0.12/0.13, zip 2/9, dirs 6/7, base64 0.22/0.23 이 두 벌씩 컴파일된다(cargo tree -d 실측).",
-        "details": "Cargo.toml: reqwest 0.13(default-features=false, json + rustls 계열, updater.rs 방식대로 setup 에서 crypto provider install_default), zip 9(SimpleFileOptions · start_file · add_directory · enclosed_name · by_index 그대로), dirs 7, base64 0.23. reqwest 0.12+rustls-tls 는 내장 webpki-roots 라 회사 루트 인증서를 안 믿는다는 판단 → 0.13 platform-verifier 로 바로잡힘(확인 필요). notify 9 · debouncer-mini 0.8 도 검토. Tauri 3 은 알파 — 2 유지. 끝나면 cargo tree -d 로 확인. [0.6.0 재검증] 유효. Cargo.toml 그대로.",
+        "details": "Cargo.toml: reqwest 0.13(default-features=false, json + rustls 계열, updater.rs 방식대로 setup 에서 crypto provider install_default), zip 9(SimpleFileOptions · start_file · add_directory · enclosed_name · by_index 그대로), dirs 7, base64 0.23. reqwest 0.12+rustls-tls 는 내장 webpki-roots 라 회사 루트 인증서를 안 믿는다는 판단 → 0.13 platform-verifier 로 바로잡힘(확인 필요). notify 9 · debouncer-mini 0.8 도 검토. Tauri 3 은 알파 — 2 유지. 끝나면 cargo tree -d 로 확인. [0.6.0 재검증] 유효. Cargo.toml 그대로.\n\n[완료 23:59] chore/rust-dup-deps → 원본 PR #15 · collab(+sha2 0.11). zip 2→9 · dirs 6→7 · base64 0.22→0.23. reqwest 는 0.12 유지(0.13 은 rustls 공급자 설치 필요, 그림 생성 HTTPS 시험 못 함). 확인: cargo test, .cppt 왕복 125파일 바이트 같음 · 판 이력 같음, 저장된 기기 해시 그대로 통과. notify 9 · debouncer 0.8 은 검토만(중복 아님)",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:59:27.936Z"
       },
       {
         "id": "18",
@@ -122,9 +123,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:50:46.974Z",
+      "lastModified": "2026-11-25T14:59:27.721Z",
       "taskCount": 10,
-      "completedCount": 8,
+      "completedCount": 9,
       "tags": [
         "master"
       ]
