@@ -143,12 +143,13 @@
         "id": "2",
         "title": "[C0] 판 남기기를 화면 스레드 밖으로 (창이 최대 60초 멈춤)",
         "description": "vcs_* 가 동기 명령이라 판 잠금을 기다리는 동안 앱 창이 멈춘다. 여럿이 동시에 쓰면 더 자주 걸린다. master #7.",
-        "details": "vcs.rs 의 vcs_init · vcs_commit · vcs_log · vcs_tag · vcs_restore 와 project.rs · fsx.rs 의 동기 명령을 #[tauri::command(async)] 로. 덱별 잠금은 기존 .git/claudeppt-commit.lock 를 쓴다. 가능하면 commit 의 git 호출 수를 줄이고(status --porcelain), 전역 git 설정 격리(GIT_CONFIG_NOSYSTEM · 훅 끄기 · gc.auto=0). 원본에도 이로운 고장 수정이므로 upstream/main 에서 딴 fix 브랜치로 PR 을 보내고(규칙 참고), collab 에도 합친다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "vcs.rs 의 vcs_init · vcs_commit · vcs_log · vcs_tag · vcs_restore 와 project.rs · fsx.rs 의 동기 명령을 #[tauri::command(async)] 로. 덱별 잠금은 기존 .git/claudeppt-commit.lock 를 쓴다. 가능하면 commit 의 git 호출 수를 줄이고(status --porcelain), 전역 git 설정 격리(GIT_CONFIG_NOSYSTEM · 훅 끄기 · gc.auto=0). 원본에도 이로운 고장 수정이므로 upstream/main 에서 딴 fix 브랜치로 PR 을 보내고(규칙 참고), collab 에도 합친다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 18:53] 브랜치 fix/commands-off-main-thread(0fcfec7, fork main=0.7.0 위) → 원본 PR a7garden/claudeppt#4 · collab 에 합침(9320232). 바꾼 것: vcs_* · library_list · pack/unpack_deck · abs_read_bytes · abs_copy_in 을 #[tauri::command(async)] (원본 seats 와 같은 방식, CLI 동기 호출 그대로) + git -c 격리(hooksPath · fsmonitor · log.showSignature · color.ui · i18n.logOutputEncoding). 하지 않은 것: git 호출 수 줄이기(효과 작고 원본 vcs 와 충돌 커짐), GIT_CONFIG_NOSYSTEM(Windows 의 core.fscache 를 잃어 오히려 느려짐), gc.auto=0(느슨한 개체가 끝없이 쌓임). 시험: cargo test 새 시험(격리 줄을 빼면 실패 확인) · 개발 실행에서 판 잠금을 쥔 채 판 남기기 → 다른 명령 지연 고치기 전 4333ms / 고친 뒤 2~3ms (fix 와 collab 둘 다)",
         "testStrategy": "cargo check · cargo test · 개발 실행에서 판 잠금을 잡아 둔 채(잠금 파일을 만들어 두고) 직접 편집 판을 남겨도 창이 멈추지 않는지(CDP 로 다른 조작이 바로 되는지)",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T09:53:57.522Z"
       },
       {
         "id": "3",
@@ -348,9 +349,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T09:44:16.892Z",
+      "lastModified": "2026-11-25T09:53:57.329Z",
       "taskCount": 17,
-      "completedCount": 1,
+      "completedCount": 2,
       "tags": [
         "collab"
       ]

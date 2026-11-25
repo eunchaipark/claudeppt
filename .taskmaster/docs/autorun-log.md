@@ -44,3 +44,15 @@
   - 다시 열기: 세션 · 묶음 · 지금 대화 · 턴 그대로. 옛 talk.json(sessionId 하나) → s1 로 옮겨지고 턴이 s1 에
 - 확인하지 못한 것: 진짜 Claude 턴(이 작업은 화면 · 라우팅만 바뀌어 가짜로 충분, 앞서 2턴으로 resume 확인함) · 영어 화면 · 좁은 창
 - 사용자 덱 「제목 없음」: 건드리지 않음(마지막 판 fffba4c 그대로)
+
+## collab #2 — 오래 걸리는 명령을 화면 스레드 밖으로 (19:15 ~ 19:50)
+
+- 브랜치: `fix/commands-off-main-thread` 0fcfec7 (fork main = 0.7.0 위) → **원본 PR a7garden/claudeppt#4** · collab 에 합침 9320232
+- 바꾼 것
+  - `vcs_init` · `vcs_commit` · `vcs_log` · `vcs_tag` · `vcs_restore` · `library_list` · `pack_deck` · `unpack_deck` · `abs_read_bytes` · `abs_copy_in` → `#[tauri::command(async)]`. 원본이 담당 명령에 이미 쓰는 방식이고, 함수는 동기 그대로라 CLI 는 손대지 않음
+  - 덱 저장소 git 에 `-c core.hooksPath=<없는 폴더>` · `core.fsmonitor=false` · `log.showSignature=false` · `color.ui=false` · `i18n.logOutputEncoding=utf-8`
+  - 하지 않은 것: git 호출 수 줄이기(창이 안 멈추면 효과 작고 원본 vcs 와 충돌만 커짐) · GIT_CONFIG_NOSYSTEM(Windows Git 의 core.fscache 를 잃음) · gc.auto=0(느슨한 개체가 계속 쌓임)
+- 시험
+  - `cargo test --lib` 9개(fix) / 4개(collab) 통과. 새 시험 `user_git_config_does_not_leak_in`: 저장소에 실패하는 pre-commit · commit-msg 훅, showSignature, color.ui=always, fsmonitor 를 켠 채 판 남기기 · 태그 · 목록 · 되돌리기. **격리 줄을 빼면 「blocked」로 실패**하는 것을 확인
+  - 개발 실행: 새 시험 덱의 `.git/claudeppt-commit.lock` 을 쥔 채 판 남기기를 부르고 그동안 `fs_exists` 지연을 잼 — **고치기 전 4333ms(잠금 풀 때까지 앱 전체가 멈춤) → 고친 뒤 2~3ms**. 판은 잠금이 풀린 뒤 이어서 남음. fix 브랜치 · collab 둘 다
+- 확인하지 못한 것: release 빌드, 덱 수백 개 라이브러리
