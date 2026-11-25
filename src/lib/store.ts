@@ -507,7 +507,7 @@ async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string
 				vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
 			}
 			// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
-			const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
+			const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines, deck);
 			// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
 			const run = (p: string, resume: string | null) =>
 				api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });

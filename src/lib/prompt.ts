@@ -92,7 +92,8 @@ export function systemPrompt(s: Settings, deck: Deck) {
 		BASE_PROMPT,
 		houseStyle(s, deck),
 		imageRules(s, tpl),
-		`# Deck\nTitle: ${deck.title}\nSize: ${deck.size.w}×${deck.size.h}px\nSlides: ${deck.slides.length}${deck.source?.kind === "pptx" ? `\nImported from PPTX. Reference pages: ${deck.source.pages ? `source/pages/1.png … ${deck.source.pages}.png` : "none"}` : ""}`,
+		// 바뀌지 않는 것만 — 시스템 프롬프트가 바뀌면 이어 온 대화 전체의 프롬프트 캐시가 깨진다. 제목 · 쪽 수 · 쪽 목록은 요청문에 (turnPrompt)
+		`# Deck\nSize: ${deck.size.w}×${deck.size.h}px. The current title and slide list come with each request.${deck.source?.kind === "pptx" ? `\nImported from PPTX. Reference pages: ${deck.source.pages ? `source/pages/1.png … ${deck.source.pages}.png` : "none"}` : ""}`,
 		`# Language\nWrite replies in ${lang}. Write slide text in the language the person uses for the deck content.`,
 	]
 		.filter(Boolean)
@@ -106,8 +107,16 @@ export interface PinNote { n: number; slide: string; slideNo: number; x: number;
 export const pinLine = (p: PinNote) =>
 	`${p.n}. slide ${p.slideNo} (slides/${p.slide}.html) ` + (p.shape ? describe(p.shape) : `at (${Math.round(p.x)}, ${Math.round(p.y)})`) + (p.target ? ` on <${p.target.tag}>${p.target.text ? ` "${p.target.text}"` : ""}` : "") + (p.by ? ` (comment by ${p.by})` : "") + `\n   ${p.text.trim() || (p.shape ? "(no comment — look at what this mark shows)" : "(no comment — look at this spot)")}`;
 
-/** 한 턴의 요청문 — 사용자 글 · @쪽 멘션 · @판 멘션 · 핀 · 지금 보던 쪽. versions 는 versions.ts versionContext 가 만든 줄 */
-export function turnPrompt(text: string, pins: PinNote[], current: { id: string; no: number } | null, attachments: string[], mentions: Mention[] = [], versions: string[] = []) {
+/** 덱의 지금 모습 — 제목과 쪽 목록(번호 · 파일 · 제목). 쪽을 더하고 빼도 시스템 프롬프트가 바뀌지 않게 요청마다 싣는다.
+ *  목록이 있으면 Claude 가 deck.json 을 읽으러 오가는 일도 준다. 아주 긴 덱은 앞 80쪽만 */
+export function deckOutline(deck: Deck) {
+	const list = deck.slides.slice(0, 80).map((s, i) => `${i + 1}. ${s.file}${s.title ? ` "${s.title.replace(/\s+/g, " ").slice(0, 60)}"` : ""}`);
+	const more = deck.slides.length > 80 ? `\n… ${deck.slides.length - 80} more in deck.json` : "";
+	return `Deck now: "${deck.title}", ${deck.slides.length} slides (deck.json order):\n${list.join("\n")}${more}`;
+}
+
+/** 한 턴의 요청문 — 사용자 글 · @쪽 멘션 · @판 멘션 · 핀 · 지금 보던 쪽 · 덱 목차. versions 는 versions.ts versionContext 가 만든 줄 */
+export function turnPrompt(text: string, pins: PinNote[], current: { id: string; no: number } | null, attachments: string[], mentions: Mention[] = [], versions: string[] = [], deck?: Deck) {
 	const parts: string[] = [];
 	if (text.trim()) parts.push(text.trim());
 	if (mentions.length) {
@@ -131,5 +140,6 @@ export function turnPrompt(text: string, pins: PinNote[], current: { id: string;
 	}
 	if (attachments.length) parts.push("Attached files (Read them):\n" + attachments.map((a) => "- " + a).join("\n"));
 	if (current) parts.push(`(The person is looking at slide ${current.no}: slides/${current.id}.html)`);
+	if (deck) parts.push(deckOutline(deck));
 	return parts.join("\n\n");
 }
