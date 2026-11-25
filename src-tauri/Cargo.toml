@@ -28,14 +28,14 @@ serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread", "net"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
-dirs = "6"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+dirs = "7"
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # 프로젝트 폴더 감시 — Claude 가 파일을 고치면 화면을 바로 다시 그린다 (핫 리로드).
 notify = "8"
 notify-debouncer-mini = "0.7"
 # 이미지 생성 API (OpenAI · Gemini). 시스템 인증서 저장소 대신 rustls 로 — 회사 PC 프록시 설정과 무관하게 돈다.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-base64 = "0.22"
+base64 = "0.23"
 # 바이트 쓰기 명령의 경로 머리글 풀기 (한글 경로)
 percent-encoding = "2"
 # 우클릭 메뉴의 「붙여 넣기」 — 웹뷰의 navigator.clipboard.readText 는 권한을 묻다 멈춘다
@@ -43,7 +43,7 @@ arboard = { version = "3", default-features = false }
 # 팀 협업 서버 (collab.rs) — 「설정 › 협업」을 켜면 브라우저 팀원에게 화면 · 슬라이드 · 상태를 HTTP + WebSocket 으로 내준다
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws", "json", "query", "form"] }
 # 협업 기기 열쇠를 해시로만 남긴다 (tauri 가 이미 쓰는 판)
-sha2 = "0.10"
+sha2 = "0.11"
 # 협업 서버 응답 압축 — 바깥 길(터널)이 느릴 때 화면 · 슬라이드 글을 줄여 보낸다
 tower-http = { version = "0.6", default-features = false, features = ["compression-gzip"] }
 

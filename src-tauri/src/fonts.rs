@@ -212,7 +212,8 @@ async fn fetch_and_install(client: &reqwest::Client, url: &str) -> Res<Vec<Strin
 		let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec())).map_err(err)?;
 		for i in 0..z.len() {
 			let mut e = z.by_index(i).map_err(err)?;
-			let n = e.name().replace('\\', "/");
+			// zip 9: 이름이 UTF-8 로 읽히지 않으면 Err — 그 항목은 건너뛴다
+			let Ok(n) = e.name().map(|n| n.replace('\\', "/")) else { continue };
 			if n.contains("__MACOSX") || !is_font_file(Path::new(&n)) {
 				continue;
 			}
