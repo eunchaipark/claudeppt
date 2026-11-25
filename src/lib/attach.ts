@@ -18,7 +18,7 @@ export const attachable = (name: string) => ATTACH_EXT.includes(extOf(name));
 export const isImage = (name: string) => IMAGE_EXT.includes(extOf(name)) || extOf(name) === "svg";
 
 /** 파일 이름. 첨부 폴더 안에서 겹치지 않게 앞에 때를 붙인다. Claude 가 어떤 파일인지 알아보게 원래 이름은 남긴다 */
-const relFor = (name: string) => {
+export const relFor = (name: string) => {
 	const safe = name.replace(/[\\/:*?"<>|]+/g, "_").slice(-80) || "file";
 	return `.claudeppt/attach/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}-${safe}`;
 };

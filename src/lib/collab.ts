@@ -7,10 +7,12 @@
 //   접속               누가 붙었고 어느 쪽을 보는지 — useCollab.members. 쪽 목록 · 무대 머리에 보인다
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import { api, b64FromBytes } from "./api";
+import { attachable, relFor, useAttach } from "./attach";
 import { call, remote, remoteDeck } from "./transport";
 import { tNow } from "./i18n";
 import { useSettings } from "./settings";
-import { me, type Turn, useDeck } from "./store";
+import { isSending, me, nextSession, persistTalk, type Turn, useDeck } from "./store";
 
 export interface Member { conn: number; device: string; name: string; slide: string | null; host: boolean; since: number }
 export interface InviteLink { id: string; url: string; name: string | null; expires: number | null; expired: boolean }
@@ -136,10 +138,58 @@ async function handleIntent(p: { id: string; from: { conn: number; name: string 
 	try {
 		reply = fn ? { ok: true, value: (await fn(p.from, p.args ?? {})) ?? null } : { ok: false, error: tNow("collabNotYet") };
 	} catch (e) {
-		reply = { ok: false, error: String(e) };
+		reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
 	}
 	call("collab_reply", { id: p.id, reply }).catch(() => {});
 }
+
+// ── 호스트: 의도 처리기 — 브라우저 팀원이 하려는 일을 호스트 store 로. 보낸 사람(from.name)은 서버가 정한 기기 이름 ──
+
+/** 첨부 한 파일의 가장 큰 크기 — 큰 파일은 바깥 길에서 오래 걸리고 Claude 도 다 읽지 못한다 */
+const UPLOAD_MAX = 10 * 1024 * 1024;
+
+onIntent("send", (from, a) => new Promise((ok, no) => {
+	const d = useDeck.getState();
+	if (!d.deck) return no(new Error(tNow("collabWaiting")));
+	// 지금은 앱 전체가 한 번에 한 턴이다 (세션마다 대기열은 다음 작업)
+	if (d.running || isSending()) return no(new Error(tNow("collabBusy")));
+	const pins = d.pins.filter((p) => Array.isArray(a.pins) && a.pins.includes(p.id));
+	// 첨부는 그 팀원이 올린 것(.claudeppt/attach/)만 — 다른 곳의 경로를 적어 보내 Claude 가 읽게 하지 못하게
+	const atts: string[] = (Array.isArray(a.attachments) ? a.attachments : []).filter((x: unknown) => typeof x === "string" && /^\.claudeppt\/attach\/[^\\/]+$/.test(x));
+	let started = false;
+	d.send(String(a.text ?? ""), atts, true, { by: from.name || tNow("collabNoName"), current: typeof a.current === "string" ? a.current : null, talkKey: typeof a.talkKey === "string" ? a.talkKey : null, pins, onStart: (r) => { started = true; ok(r); } })
+		.then(() => { if (!started) ok(null); }, no);
+}));
+
+onIntent("stop", async (_from, a) => {
+	const d = useDeck.getState();
+	if (d.running && (!a.turn || a.turn === d.running)) d.stop();
+});
+
+/** 새 대화 — 호스트가 보는 대화는 그대로 두고 새 세션만 만든다. 그 팀원의 지금 대화가 아직 빈 세션이면 그것을 쓴다 */
+onIntent("newTalk", async (_from, a) => {
+	const st = useDeck.getState();
+	if (!st.dir) throw new Error(tNow("collabWaiting"));
+	const cur = st.sessions.find((x) => x.key === a.talkKey);
+	if (cur && !cur.claude && !st.turns.some((t) => t.session === cur.key)) return { key: cur.key };
+	const ns = nextSession(st.sessions);
+	useDeck.setState({ sessions: [...st.sessions, ns] });
+	persistTalk(st.dir, useDeck.getState());
+	return { key: ns.key };
+});
+
+/** 첨부 올리기 — 그림 · PDF · 글만, 10MB 까지. 덱의 .claudeppt/attach/ 에 쓰고 그 경로를 돌려준다 */
+onIntent("upload", async (_from, a) => {
+	const { dir } = useDeck.getState();
+	const name = String(a.name ?? "");
+	const data = String(a.data ?? "");
+	if (!dir) throw new Error(tNow("collabWaiting"));
+	if (!attachable(name)) throw new Error(`${tNow("attachRefused")}: ${name}`);
+	if (data.length > (UPLOAD_MAX * 4) / 3 + 4) throw new Error(tNow("collabTooBig"));
+	const rel = relFor(name);
+	await api.writeB64(dir, rel, data);
+	return rel;
+});
 
 // ── 브라우저 ──
 
@@ -240,6 +290,19 @@ export function connect() {
 	let name = useSettings.getState().s.me;
 	useSettings.subscribe((s) => { if (s.s.me !== name) { name = s.s.me; hello(); } });
 	useDeck.setState(remoteActions());
+	// 첨부는 호스트에 올려 그 덱의 첨부 폴더에 둔다 — 브라우저에는 이 PC 의 파일 경로가 없다
+	useAttach.setState({
+		addBlobs: async (files: File[]) => {
+			for (const f of files) {
+				const name = f.name && /\.[a-z0-9]+$/i.test(f.name) ? f.name : `image.${f.type.split("/")[1] || "png"}`;
+				if (!attachable(name)) { useDeck.getState().notify(`${tNow("attachRefused")}: ${name}`, "err"); continue; }
+				if (f.size > UPLOAD_MAX) { useDeck.getState().notify(`${name}: ${tNow("collabTooBig")}`, "err"); continue; }
+				const rel = await intent<string>("upload", { name, data: b64FromBytes(new Uint8Array(await f.arrayBuffer())) }).catch((e) => { useDeck.getState().notify(String(e.message || e), "err"); return null; });
+				if (rel) useAttach.setState({ files: [...useAttach.getState().files, rel] });
+			}
+		},
+		addPaths: async () => {},
+	});
 }
 
 /** 브라우저의 store 동작 — 쓰는 것은 의도로, 호스트만 하는 것은 막는다. 보는 사람 몫(쪽 옮기기 · 도구 · 세션 보기)은 그대로 */
@@ -251,13 +314,15 @@ function remoteActions() {
 		openProject: hostOnly,
 		closeProject: hostOnly,
 		send: async (text: string, attachments: string[] = []) => {
-			const name = useSettings.getState().s.me.trim();
-			if (!name) return d.notify(tNow("myNameAsk"), "err");
-			const r = await intent<{ key: string } | null>("send", { text, attachments, pins: useDeck.getState().pins.map((p) => p.id), talkKey: useDeck.getState().talkKey, current: useDeck.getState().deck?.slides[useDeck.getState().current]?.id ?? null }).catch(fail);
-			if (r && r.key) useDeck.setState({ talkKey: r.key });
+			const st = useDeck.getState();
+			const r = await intent<{ key: string; via?: number } | null>("send", { text, attachments, pins: [], talkKey: st.talkKey, current: st.deck?.slides[st.current]?.id ?? null }).catch(fail);
+			if (!r || !r.key) return;
+			// 보던 대화와 다른 세션(그 쪽을 처음 고친 세션)으로 갔으면 알리고 대화칸을 그리로
+			if (st.talkKey && r.key !== st.talkKey && r.via) d.notify(tNow("routedTo").replace("{no}", String(r.via)).replace("{n}", r.key.slice(1)), "ok");
+			useDeck.setState({ talkKey: r.key });
 		},
 		stop: () => { intent("stop", { turn: useDeck.getState().running }).catch(fail); },
-		newTalk: () => { intent<{ key: string }>("newTalk").then((r) => r && useDeck.setState({ talkKey: r.key }), fail); },
+		newTalk: () => { intent<{ key: string }>("newTalk", { talkKey: useDeck.getState().talkKey }).then((r) => { if (r) { useDeck.setState({ talkKey: r.key }); d.notify(tNow("newTalkDone").replace("{n}", r.key.slice(1)), "ok"); } }, fail); },
 		viewSession: (key: string) => useDeck.setState({ talkKey: key }),
 		addSlide: hostOnly,
 		duplicateSlide: hostOnly,

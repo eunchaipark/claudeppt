@@ -63,6 +63,8 @@ export interface Turn {
  * key 는 앱이 붙인 이름(s1 · s2 …), claude 는 Claude Code 의 세션 id (첫 턴이 돌아야 생긴다)
  */
 export interface Session { key: string; claude: string | null; at: number }
+/** 협업 브라우저에서 온 요청 — by 는 서버가 정한 기기 이름. onStart 는 턴이 만들어지자마자(끝나기 전에) 부른다 */
+export interface SendFrom { by: string; current: string | null; talkKey: string | null; pins: Pin[]; onStart?: (r: { key: string; via?: number; turn: string }) => void }
 /** 화면 뒤에서 도는 긴 일(PPTX 가져오기) 하나. n 이 0 이면 아직 전체 양을 모른다 */
 export interface Job { id: string; label: string; i: number; n: number; note?: string }
 export interface Release { name: string; tag: string; n: number; hash: string; file: string; notes: string; at: string }
@@ -122,8 +124,9 @@ interface S {
 	addPin: (p: Omit<Pin, "id" | "at">) => string;
 	updatePin: (id: string, text: string) => void;
 	removePin: (id: string) => void;
-	/** force — 앱 밖 Claude Code 가 방금 이 덱을 다뤘어도 보낸다 (알림의 「그래도 보내기」) */
-	send: (text: string, attachments?: string[], force?: boolean) => Promise<void>;
+	/** force — 앱 밖 Claude Code 가 방금 이 덱을 다뤘어도 보낸다 (알림의 「그래도 보내기」).
+	 *  from — 협업 브라우저 팀원이 보낸 요청 (collab.ts). 보낸 사람 · 그 사람이 보던 쪽 · 그 사람의 지금 대화로 처리하고, 호스트 화면(보는 대화 · 핀)은 건드리지 않는다 */
+	send: (text: string, attachments?: string[], force?: boolean, from?: SendFrom) => Promise<void>;
 	stop: () => void;
 	/** 새 세션을 열어 지금 대화로 삼는다 — 대화칸이 빈 새 대화가 된다 */
 	newTalk: () => void;
@@ -253,7 +256,7 @@ export const sameDir = (a: string, b: string) => {
 const persistPins = (dir: string, pins: Pin[]) => api.writeText(dir, ".claudeppt/pins.json", JSON.stringify(pins, null, 1)).catch(() => {});
 /** .claudeppt/talk.json — sessionId 는 세션이 하나뿐이던 때(2026.11.25 전)의 칸. 옛 앱도 읽게 지금 대화의 세션을 적어 둔다 */
 type TalkFile = { turns: Turn[]; sessions?: Session[]; bind?: Record<string, string>; talkKey?: string | null; sessionId?: string | null };
-const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "talkKey">) => {
+export const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "talkKey">) => {
 	const file: TalkFile = {
 		sessions: st.sessions,
 		bind: st.bind,
@@ -264,7 +267,7 @@ const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "t
 	return api.writeText(dir, ".claudeppt/talk.json", JSON.stringify(file, null, 1)).catch(() => {});
 };
 /** 다음 세션 — s1 · s2 … */
-const nextSession = (list: Session[]): Session => ({ key: "s" + (Math.max(0, ...list.map((x) => Number(x.key.slice(1)) || 0)) + 1), claude: null, at: Date.now() });
+export const nextSession = (list: Session[]): Session => ({ key: "s" + (Math.max(0, ...list.map((x) => Number(x.key.slice(1)) || 0)) + 1), claude: null, at: Date.now() });
 /** 이 기기를 쓰는 팀원 — 판의 작성자로도 남긴다 */
 export const me = () => useSettings.getState().s.me.trim();
 /** 새 Claude 세션 id (--session-id) */
@@ -316,6 +319,120 @@ const relOf = (dir: string, p?: string) => {
 	const a = p.replace(/\\/g, "/"), d = dir.replace(/\\/g, "/").replace(/\/$/, "") + "/";
 	return a.toLowerCase().startsWith(d.toLowerCase()) ? a.slice(d.length) : a;
 };
+
+/** 보내는 중 — send 가 턴을 세우기 전부터 끝날 때까지. 협업 처리기도 본다 */
+let sending = false;
+export const isSending = () => sending;
+
+/** 요청 한 턴 — 세션 고르기 · Claude 실행 · 그림 채우기 · 판 남기기. send 가 한 번에 하나만 부른다 */
+async function sendTurn(get: () => S, set: (p: Partial<S>) => void, text: string, attachments: string[], force: boolean, from?: SendFrom) {
+	const { dir, deck, running } = get();
+	if (!deck || running) return;
+	// 협업 팀원의 요청은 그 사람이 보던 쪽 · 그 사람의 핀으로
+	const pins = from ? from.pins : get().pins;
+	const current = from ? Math.max(0, deck.slides.findIndex((x) => x.id === from.current)) : get().current;
+	if (!text.trim() && !pins.length && !attachments.length) return;
+	// 누가 보냈는지 남겨야 한다 — 이름이 없으면 보내지 않는다 (요청칸 위에 이름 칸이 뜬다)
+	const by = from ? from.by : me();
+	if (!by) {
+		if (text.trim()) get().refill(text);
+		return get().notify(tNow("myNameAsk"), "err");
+	}
+	// 앱 밖 Claude Code 가 방금 이 덱을 다뤘으면 한 번 묻는다 — 그쪽이 고치던 파일이 이 턴의 판에 섞이고, 같은 쪽을 둘이 고치면 한쪽이 덮인다.
+	// 요청칸은 보내며 비워지므로 글을 되돌려 놓는다
+	const out = get().outside;
+	if (!force && !from && out && sameDir(out.dir, dir) && Date.now() - out.at < OUTSIDE_MS) {
+		if (text.trim()) get().refill(text);
+		const run = () => {
+			if (text.trim()) get().refill("");
+			get().send(text, attachments, true);
+		};
+		get().notify(tNow("outsideBusy").replace("{cmd}", out.cmd), "err", { action: { label: tNow("sendAnyway"), run } });
+		return;
+	}
+	clearUndo();
+	const s = useSettings.getState().s;
+	// 직접 편집이 남아 있으면 먼저 판으로 — Claude 의 판과 섞이지 않게
+	clearTimeout(directTimer);
+	await api.commit(dir, tNow("direct"), by).catch(() => {});
+	const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
+	const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
+	const cur = deck.slides[current];
+	const mentions = mentionsIn(text, deck);
+	const versionMentions = versionMentionsIn(text, get().versions);
+	// 세션 고르기 (routeOf). 보고 있던 대화와 다른 세션으로 가면 알리고, 대화칸도 그 세션으로 옮긴다 — 보낸 요청이 보이게
+	const route = routeOf(from ? { ...get(), current, talkKey: from.talkKey, pins } : get(), text);
+	let { sessions } = get();
+	let key = route.key;
+	if (!key) {
+		const ns = nextSession(sessions);
+		sessions = [...sessions, ns];
+		key = ns.key;
+		set({ sessions });
+	}
+	if (!from && get().talkKey && key !== get().talkKey && route.via) get().notify(tNow("routedTo").replace("{no}", String(route.via)).replace("{n}", key.slice(1)), "ok");
+	const session = sessions.find((x) => x.key === key)!;
+	const turn: Turn = { id: "t" + Date.now().toString(36), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: "running", by, session: key };
+	// 지금 대화 = 마지막에 쓰인 세션. 팀원의 요청이면 호스트가 보는 대화는 그대로 두고 그 팀원의 핀만 걷는다
+	set(from ? { turns: [...get().turns, turn], running: turn.id, pins: get().pins.filter((p) => !pins.includes(p)) } : { turns: [...get().turns, turn], running: turn.id, pins: [], talkKey: key });
+	persistPins(dir, get().pins);
+	from?.onStart?.({ key, via: route.via, turn: turn.id });
+	const patch = (fn: (t: Turn) => Turn) => set({ turns: get().turns.map((t) => (t.id === turn.id ? fn(t) : t)) });
+
+	try {
+		// 표시가 있으면 그 쪽 그림 위에 그려 붙인다. 못 만들어도 좌표 글은 가므로 턴은 그대로 돈다
+		if (notes.some((n) => n.shape)) {
+			patch((t) => ({ ...t, phase: tNow("marking") }));
+			attachments = [...attachments, ...(await markedPictures(dir, get().id, deck, notes).catch(() => []))];
+			patch((t) => ({ ...t, phase: undefined }));
+		}
+		// 판 멘션 — 그 판 파일을 .claudeppt/versions/v<n>/ 에 펼치고 지금과 다른 쪽을 적어 넘긴다. 못 펼친 판은 번호만이라도 알린다
+		const vlines: string[] = [];
+		for (const v of versionMentions) {
+			const c = get().versions.find((x) => x.hash === v.hash);
+			vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
+		}
+		// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
+		const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
+		// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
+		const run = (p: string, resume: string | null) =>
+			api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });
+		let r = await run(prompt, session.claude);
+		// 세션 기록을 claude 쪽에서도 덱에서도 찾지 못했다 (기록 없이 옮겨 온 덱 · 지운 기록 · UUID 가 아닌 옛 id). 그대로 두면 이 세션을 이을 때마다 실패하고
+		// 장표의 맥락이 끊긴다 — 이 세션의 지난 요청 · 답을 요약해 앞에 붙여 새 Claude 세션으로 한 번 더 돌린다
+		if (session.claude && r.code !== 0 && /No conversation found|requires a valid session ID/i.test(r.stderr) && get().turns.find((t) => t.id === turn.id)?.status !== "stopped") {
+			set({ sessions: get().sessions.map((x) => (x.key === key ? { ...x, claude: null } : x)) });
+			patch((t) => ({ ...t, error: undefined, reply: "", tools: [], cost: undefined, phase: tNow("sessionRecovering") }));
+			r = await run(recapOf(get().turns, key, turn.id) + prompt, null);
+			patch((t) => ({ ...t, phase: undefined }));
+			get().notify(tNow("sessionRecovered").replace("{n}", key.slice(1)), "ok");
+		}
+		const t0 = get().turns.find((t) => t.id === turn.id)!;
+		let status: Turn["status"] = t0.status === "stopped" ? "stopped" : r.code === 0 && !t0.error ? "done" : "failed";
+		if (status === "failed" && !t0.error) patch((t) => ({ ...t, error: r.stderr.trim().split("\n").slice(-3).join("\n") || `exit ${r.code}` }));
+		// 그림 자리 채우기
+		const fresh = await readDeck(dir).catch(() => get().deck!);
+		set({ deck: fresh });
+		if (status !== "stopped" && s.image.provider !== "svg") {
+			const errs = await fillGenerated(dir, fresh, s, (p) => patch((t) => ({ ...t, phase: `${tNow("generating")} · ${p}` })));
+			if (errs.length) patch((t) => ({ ...t, error: [t.error, ...errs].filter(Boolean).join("\n") }));
+		}
+		// 이 턴이 처음 고친 쪽은 이 세션으로 확정한다 — 이미 다른 세션에 확정된 쪽은 그대로 둔다
+		const wrote = new Set(get().turns.find((t) => t.id === turn.id)!.tools.filter((x) => x.name === "Write" || x.name === "Edit" || x.name === "MultiEdit").map((x) => x.file));
+		const bind = { ...get().bind };
+		for (const sl of fresh.slides) if (wrote.has(sl.file) && !bind[sl.id]) bind[sl.id] = key;
+		set({ bind });
+		const summary = (text.trim() || notes.map((n) => n.text).join(" · ") || "핀").replace(/\s+/g, " ").slice(0, 72);
+		const c = await api.commit(dir, summary, by).catch(() => null);
+		patch((t) => ({ ...t, status, phase: undefined, version: c ? { n: c.n, short: c.short, hash: c.hash } : undefined }));
+	} catch (e) {
+		patch((t) => ({ ...t, status: "failed", error: String(e) }));
+	} finally {
+		set({ running: null });
+		persistTalk(dir, get());
+		get().refreshVersions();
+	}
+}
 
 export const useDeck = create<S>()((set, get) => ({
 	dir: "",
@@ -521,108 +638,15 @@ export const useDeck = create<S>()((set, get) => ({
 		persistPins(get().dir, pins);
 	},
 
-	send: async (text, attachments = [], force = false) => {
-		const { dir, deck, pins, running, current } = get();
-		if (!deck || running) return;
-		if (!text.trim() && !pins.length && !attachments.length) return;
-		// 누가 보냈는지 남겨야 한다 — 이름이 없으면 보내지 않는다 (요청칸 위에 이름 칸이 뜬다)
-		const by = me();
-		if (!by) {
-			if (text.trim()) get().refill(text);
-			return get().notify(tNow("myNameAsk"), "err");
-		}
-		// 앱 밖 Claude Code 가 방금 이 덱을 다뤘으면 한 번 묻는다 — 그쪽이 고치던 파일이 이 턴의 판에 섞이고, 같은 쪽을 둘이 고치면 한쪽이 덮인다.
-		// 요청칸은 보내며 비워지므로 글을 되돌려 놓는다
-		const out = get().outside;
-		if (!force && out && sameDir(out.dir, dir) && Date.now() - out.at < OUTSIDE_MS) {
-			if (text.trim()) get().refill(text);
-			const run = () => {
-				if (text.trim()) get().refill("");
-				get().send(text, attachments, true);
-			};
-			get().notify(tNow("outsideBusy").replace("{cmd}", out.cmd), "err", { action: { label: tNow("sendAnyway"), run } });
-			return;
-		}
-		clearUndo();
-		const s = useSettings.getState().s;
-		// 직접 편집이 남아 있으면 먼저 판으로 — Claude 의 판과 섞이지 않게
-		clearTimeout(directTimer);
-		await api.commit(dir, tNow("direct"), by).catch(() => {});
-		const order = (id: string) => deck.slides.findIndex((x) => x.id === id) + 1;
-		const notes: PinNote[] = pins.map((p, i) => ({ n: i + 1, slide: p.slide, slideNo: order(p.slide), x: p.x, y: p.y, text: p.text, target: p.target, shape: p.shape }));
-		const cur = deck.slides[current];
-		const mentions = mentionsIn(text, deck);
-		const versionMentions = versionMentionsIn(text, get().versions);
-		// 세션 고르기 (routeOf). 보고 있던 대화와 다른 세션으로 가면 알리고, 대화칸도 그 세션으로 옮긴다 — 보낸 요청이 보이게
-		const route = routeOf(get(), text);
-		let { sessions } = get();
-		let key = route.key;
-		if (!key) {
-			const ns = nextSession(sessions);
-			sessions = [...sessions, ns];
-			key = ns.key;
-			set({ sessions });
-		}
-		if (get().talkKey && key !== get().talkKey && route.via) get().notify(tNow("routedTo").replace("{no}", String(route.via)).replace("{n}", key.slice(1)), "ok");
-		const session = sessions.find((x) => x.key === key)!;
-		const turn: Turn = { id: "t" + Date.now().toString(36), at: Date.now(), request: text.trim(), pins: notes, mentions, versionMentions, attach: attachments.length ? [...attachments] : undefined, reply: "", tools: [], status: "running", by, session: key };
-		// 지금 대화 = 마지막에 쓰인 세션
-		set({ turns: [...get().turns, turn], running: turn.id, pins: [], talkKey: key });
-		persistPins(dir, []);
-		const patch = (fn: (t: Turn) => Turn) => set({ turns: get().turns.map((t) => (t.id === turn.id ? fn(t) : t)) });
-
+	send: async (text, attachments = [], force = false, from) => {
+		// 보내기는 한 번에 하나 — 「도는 중」을 본 뒤 턴을 세우기까지 판 남기기를 기다리는 틈에 다른 요청(다른 팀원 · 같은 요청 두 번)이
+		// 끼어들면 한 세션에 턴 둘이 함께 돌았다 (2026.11.25 협업 시험에서 찾음)
+		if (sending) return;
+		sending = true;
 		try {
-			// 표시가 있으면 그 쪽 그림 위에 그려 붙인다. 못 만들어도 좌표 글은 가므로 턴은 그대로 돈다
-			if (notes.some((n) => n.shape)) {
-				patch((t) => ({ ...t, phase: tNow("marking") }));
-				attachments = [...attachments, ...(await markedPictures(dir, get().id, deck, notes).catch(() => []))];
-				patch((t) => ({ ...t, phase: undefined }));
-			}
-			// 판 멘션 — 그 판 파일을 .claudeppt/versions/v<n>/ 에 펼치고 지금과 다른 쪽을 적어 넘긴다. 못 펼친 판은 번호만이라도 알린다
-			const vlines: string[] = [];
-			for (const v of versionMentions) {
-				const c = get().versions.find((x) => x.hash === v.hash);
-				vlines.push(c ? await versionContext(dir, get().id, deck, c).catch((e) => `- @v${v.n}: could not be read (${e})`) : `- @v${v.n}: not found`);
-			}
-			// 한 세션을 여러 팀원이 이어 쓰므로 누가 시킨 것인지 알린다 — 「아까 말한 것」이 누구 말인지 가린다
-			const prompt = `Request from teammate: ${by}\n\n` + turnPrompt(text, notes, cur ? { id: cur.id, no: current + 1 } : null, attachments, mentions, vlines);
-			// 새 세션은 앱이 id 를 정한다 — 턴이 멈춰도 그 세션의 기록을 찾아 덱에 남긴다 (claude.rs)
-			const run = (p: string, resume: string | null) =>
-				api.claudeRun({ turn: turn.id, dir, prompt: p, system: systemPrompt(s, deck), claudePath: s.claude.path, model: s.claude.model, effort: s.claude.effort, resume, sessionId: resume ? null : uuid() });
-			let r = await run(prompt, session.claude);
-			// 세션 기록을 claude 쪽에서도 덱에서도 찾지 못했다 (기록 없이 옮겨 온 덱 · 지운 기록). 그대로 두면 이 세션을 이을 때마다 실패하고
-			// 장표의 맥락이 끊긴다 — 이 세션의 지난 요청 · 답을 요약해 앞에 붙여 새 Claude 세션으로 한 번 더 돌린다
-			if (session.claude && r.code !== 0 && /No conversation found/i.test(r.stderr) && get().turns.find((t) => t.id === turn.id)?.status !== "stopped") {
-				set({ sessions: get().sessions.map((x) => (x.key === key ? { ...x, claude: null } : x)) });
-				patch((t) => ({ ...t, error: undefined, reply: "", tools: [], cost: undefined, phase: tNow("sessionRecovering") }));
-				r = await run(recapOf(get().turns, key, turn.id) + prompt, null);
-				patch((t) => ({ ...t, phase: undefined }));
-				get().notify(tNow("sessionRecovered").replace("{n}", key.slice(1)), "ok");
-			}
-			const t0 = get().turns.find((t) => t.id === turn.id)!;
-			let status: Turn["status"] = t0.status === "stopped" ? "stopped" : r.code === 0 && !t0.error ? "done" : "failed";
-			if (status === "failed" && !t0.error) patch((t) => ({ ...t, error: r.stderr.trim().split("\n").slice(-3).join("\n") || `exit ${r.code}` }));
-			// 그림 자리 채우기
-			const fresh = await readDeck(dir).catch(() => get().deck!);
-			set({ deck: fresh });
-			if (status !== "stopped" && s.image.provider !== "svg") {
-				const errs = await fillGenerated(dir, fresh, s, (p) => patch((t) => ({ ...t, phase: `${tNow("generating")} · ${p}` })));
-				if (errs.length) patch((t) => ({ ...t, error: [t.error, ...errs].filter(Boolean).join("\n") }));
-			}
-			// 이 턴이 처음 고친 쪽은 이 세션으로 확정한다 — 이미 다른 세션에 확정된 쪽은 그대로 둔다
-			const wrote = new Set(get().turns.find((t) => t.id === turn.id)!.tools.filter((x) => x.name === "Write" || x.name === "Edit" || x.name === "MultiEdit").map((x) => x.file));
-			const bind = { ...get().bind };
-			for (const sl of fresh.slides) if (wrote.has(sl.file) && !bind[sl.id]) bind[sl.id] = key;
-			set({ bind });
-			const summary = (text.trim() || notes.map((n) => n.text).join(" · ") || "핀").replace(/\s+/g, " ").slice(0, 72);
-			const c = await api.commit(dir, summary, by).catch(() => null);
-			patch((t) => ({ ...t, status, phase: undefined, version: c ? { n: c.n, short: c.short, hash: c.hash } : undefined }));
-		} catch (e) {
-			patch((t) => ({ ...t, status: "failed", error: String(e) }));
+			await sendTurn(get, set, text, attachments, force, from);
 		} finally {
-			set({ running: null });
-			persistTalk(dir, get());
-			get().refreshVersions();
+			sending = false;
 		}
 	},
 
