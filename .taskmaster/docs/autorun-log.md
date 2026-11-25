@@ -110,3 +110,16 @@
   - **Edge(별도 프로필, 원격 디버깅 9334)로 LAN 주소 `http://10.143.185.36:47815/?k=…` 열기** → 주소에서 열쇠 사라짐 · 덱 보임(`shots/c7-remote1.png`) · 호스트가 쪽 추가 + 1쪽 글 고침 → 브라우저에 바로 반영(`c7-remote2.png`) · 브라우저 이름 「민수」 → 호스트 쪽 목록 · 무대에 「민」(`c7-host.png`) · 호스트 가짜 턴의 글자 흐름 · 세션 1 · 판 v2 가 브라우저에 그대로(`c7-remote-talk.png`) · 설정 협업 탭(`c7-settings.png`)
   - 호스트 화면 새로 고침 → 서버에 다시 붙음, 팀원 목록 유지
 - 확인하지 못한 것: 다른 PC(같은 와이파이)에서 — 이 PC 의 LAN 주소로 같은 PC 브라우저에서만 해 봄. Windows 방화벽 허용 창(개발 실행 exe 는 이미 허용됐는지 묻지 않았음) · 설치 판의 화면 내주기(asset_resolver) — 개발 실행은 Vite 길만 탐
+
+## collab #9 — 슬라이드 격리 · 캐시 · 압축 (19:35 ~ 19:40)
+
+- 브랜치: collab `77ccc83`
+- **보안(심각)**: 브라우저에서 슬라이드가 앱과 같은 출처라, 슬라이드 안 스크립트가 앱 화면을 조작하거나 그 팀원 이름으로 의도(Claude 요청 등)를 보낼 수 있었다 → 슬라이드 iframe 을 `sandbox="allow-scripts"`(출처 없음)로, 슬라이드는 쿠키 대신 **덱 열쇠 주소** `/_/d/<열쇠>/…`(읽기 전용, 화면 열쇠와 다름)로, 슬라이드 HTML 에 CSP `connect-src 'none'; form-action 'none'; base-uri 'self'; object-src 'none'`
+- `/_/ws` · `/_/rpc` 는 Origin 이 Host 와 같을 때만(같은 PC 다른 포트 · sandbox `null` 막기)
+- 캐시: 지금 파일 ETag + no-cache(304) · `<id>@<커밋>` 과 설치 판 `/assets/` immutable · gzip
+- 시험
+  - `cargo test --lib` collab 5개(Origin 검사 6가지 · ETag) 통과
+  - 슬라이드 iframe 안에서(Edge CDP 로 그 iframe 에 붙어): `parent.document` SecurityError · `fetch('/_/rpc')` 막힘 · `WebSocket('/_/ws')` 막힘 · `document.cookie` SecurityError
+  - curl: 다른 Origin 의 rpc 403 · `Origin: null` 의 ws 403 · 틀린 덱 열쇠 401 · ETag 같으면 304 / 다르면 200 · 판 고정 주소 `immutable` · 런타임 41KB → gzip 14.5KB
+  - 화면: 격리해도 슬라이드 · 쪽 목록이 그대로 그려짐(`shots/c9-remote.png`)
+- 하지 않은 것: 원격 쪽 목록 PNG 썸네일(지금은 iframe, 캐시로 두 번째부터 가벼움) · 호스트에 깔린 local() 글꼴 내주기(글꼴 라이선스 · 크기 때문에 보류 — 덱 `assets/fonts` 에 든 글꼴은 그대로 감, 다른 PC 에 없는 글꼴은 대체 글꼴로 보임) · 느린 길 첫 화면 시간(설치 판 필요)

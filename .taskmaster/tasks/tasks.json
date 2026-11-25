@@ -237,14 +237,15 @@
         "id": "9",
         "title": "[C1] 원격 대역폭 · 캐시 · 슬라이드 보안",
         "description": "Funnel 처럼 느린 길에서도 첫 화면이 10초 안에. 남의 브라우저가 슬라이드 스크립트를 돌리므로 CSP. master #11 · #15 · #19.",
-        "details": "deck:// · 서버 응답: 자산 ETag + no-cache, 판 고정 주소 immutable, HTML · CSS · JS 압축. 원격 쪽 목록은 썸네일 PNG(rt.js snapshot, 내용 해시 캐시). Pretendard 를 unicode-range 조각으로. 슬라이드 HTML 에 CSP(connect-src 'self' 등). 원격 API 에서 abs_* · root 를 받는 fs_* 는 절대 노출 안 함. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "deck:// · 서버 응답: 자산 ETag + no-cache, 판 고정 주소 immutable, HTML · CSS · JS 압축. 원격 쪽 목록은 썸네일 PNG(rt.js snapshot, 내용 해시 캐시). Pretendard 를 unicode-range 조각으로. 슬라이드 HTML 에 CSP(connect-src 'self' 등). 원격 API 에서 abs_* · root 를 받는 fs_* 는 절대 노출 안 함. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:40] collab 77ccc83. 슬라이드 sandbox iframe(allow-scripts) + 덱 열쇠 주소 /_/d/<key>/ + CSP connect-src 'none' · ws/rpc Origin 검사 · ETag/no-cache(304) · @커밋 immutable · /assets immutable · gzip. 시험: 슬라이드 안 공격 4가지 막힘, 다른 Origin 403, 틀린 열쇠 401, 304, immutable, gzip 41→14.5KB. 하지 않음/남김: 원격 썸네일 PNG(쪽 목록이 iframe 이라 쪽이 많으면 무거움 — 캐시로 두 번째부터 가벼움), 호스트에 깔린 local() 글꼴 내주기(라이선스 · 크기 문제로 보류, 덱 assets/fonts 에 든 글꼴은 그대로 감), 느린 길 첫 화면 시간(설치 판 필요)",
         "testStrategy": "응답 머리글 확인(curl) · 대역폭 제한(Chrome DevTools 네트워크 느리게)으로 첫 화면 시간 · CSP 로 슬라이드 fetch 외부 차단 확인",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "8"
         ],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:40:59.266Z"
       },
       {
         "id": "10",
@@ -355,9 +356,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T10:33:51.092Z",
+      "lastModified": "2026-11-25T10:40:59.043Z",
       "taskCount": 17,
-      "completedCount": 8,
+      "completedCount": 9,
       "tags": [
         "collab"
       ]
