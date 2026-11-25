@@ -67,14 +67,17 @@ pub struct Commit {
 	date: String,
 	subject: String,
 	tags: Vec<String>,
+	/// 남긴 이 — 팀원이 시킨 판은 그 사람 이름, 그 밖(직접 편집 · 바깥 CLI)은 ClaudePPT
+	author: String,
 }
 
 /// 바뀐 것이 있으면 한 판으로 남기고 그 판을 돌려준다. 없으면 None.
+/// author — 이 판을 시킨 팀원 이름. 주면 git 작성자로 남는다 (판을 남기는 이는 그대로 ClaudePPT)
 #[tauri::command]
-pub fn vcs_commit(dir: String, message: String) -> Res<Option<Commit>> {
+pub fn vcs_commit(dir: String, message: String, author: Option<String>) -> Res<Option<Commit>> {
 	vcs_init(dir.clone())?;
 	let _l = lock(Path::new(&dir))?;
-	commit_all(Path::new(&dir), &message)
+	commit_all(Path::new(&dir), &message, author.as_deref())
 }
 
 /// 판 남기기 잠금 — 앱과 앱 밖 CLI(Claude Code 세션마다 프로세스가 따로 돈다)가 덱 하나의 git 색인을 함께 쓴다.
@@ -109,14 +112,20 @@ fn lock(d: &Path) -> Res<Lock> {
 	}
 }
 
-fn commit_all(d: &Path, message: &str) -> Res<Option<Commit>> {
+fn commit_all(d: &Path, message: &str, author: Option<&str>) -> Res<Option<Commit>> {
 	run(d, &["add", "-A"])?;
 	let changed = !git(d).args(["diff", "--cached", "--quiet"]).status().map_err(err)?.success();
 	let first = run(d, &["rev-parse", "--verify", "-q", "HEAD"]).is_err();
 	if !changed && !first {
 		return Ok(None);
 	}
-	run(d, &["commit", "-q", "--allow-empty", "-m", message])?;
+	// git 작성자 꼴은 「이름 <메일>」 — 이름에 꺾쇠가 있으면 꼴이 깨지므로 뺀다
+	let by = author.map(|a| a.replace(['<', '>'], "").trim().to_string()).filter(|a| !a.is_empty()).map(|a| format!("--author={a} <member@claudeppt>"));
+	let mut args = vec!["commit", "-q", "--allow-empty", "-m", message];
+	if let Some(b) = &by {
+		args.push(b);
+	}
+	run(d, &args)?;
 	Ok(head(d).ok())
 }
 
@@ -139,7 +148,7 @@ pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 			}
 		}
 	}
-	let mut args = vec!["log".to_string(), "--format=%H%x09%h%x09%ci%x09%s".to_string()];
+	let mut args = vec!["log".to_string(), "--format=%H%x09%h%x09%ci%x09%an%x09%s".to_string()];
 	if let Some(l) = limit {
 		args.push(format!("-{l}"));
 	}
@@ -149,12 +158,13 @@ pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 		.lines()
 		.enumerate()
 		.filter_map(|(i, l)| {
-			let mut p = l.splitn(4, '\t');
+			let mut p = l.splitn(5, '\t');
 			let hash = p.next()?.to_string();
 			Some(Commit {
 				n: total - i as u32,
 				short: p.next()?.to_string(),
 				date: p.next()?.get(..16)?.to_string(),
+				author: p.next()?.to_string(),
 				subject: p.next().unwrap_or("").to_string(),
 				tags: tags.remove(&hash).unwrap_or_default(),
 				hash,
@@ -173,16 +183,16 @@ pub fn vcs_tag(dir: String, name: String) -> Res<()> {
 /// releases/ · source/ 는 덱 내용이 아니라 기록이다 — 되돌려도 지우거나 옛것으로 바꾸지 않는다.
 /// (지우면 릴리즈 PPTX · 원본 쪽 그림이 사라지고, 다음 릴리즈가 같은 r<k> 를 다시 단다)
 #[tauri::command]
-pub fn vcs_restore(dir: String, hash: String, message: String) -> Res<Option<Commit>> {
+pub fn vcs_restore(dir: String, hash: String, message: String, author: Option<String>) -> Res<Option<Commit>> {
 	let d = Path::new(&dir);
 	vcs_init(dir.clone())?;
 	let _l = lock(d)?;
-	commit_all(d, "되돌리기 전 변경을 남긴다")?;
+	commit_all(d, "되돌리기 전 변경을 남긴다", None)?;
 	let keep = |p: &str| p.starts_with("releases/") || p.starts_with("source/");
 	let added = run(d, &["diff", "--name-only", "--diff-filter=A", &hash, "HEAD"])?;
 	for rel in added.lines().filter(|l| !l.is_empty() && !keep(l)) {
 		let _ = std::fs::remove_file(d.join(rel));
 	}
 	run(d, &["checkout", &hash, "--", ".", ":(exclude)releases", ":(exclude)source"])?;
-	commit_all(d, &message)
+	commit_all(d, &message, author.as_deref())
 }

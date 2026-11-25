@@ -56,6 +56,8 @@ function General() {
 	const { s, set } = useSettings();
 	return (
 		<>
+			<Row k={t("myName")}><input className="field" style={{ maxWidth: 200 }} placeholder={t("myNamePh")} value={s.me} onChange={(e) => set((x) => ({ ...x, me: e.target.value }))} /></Row>
+			<Row k=""><span className="note" style={{ whiteSpace: "normal" }}>{t("myNameNote")}</span></Row>
 			<Row k={t("language")}><Seg value={s.lang} options={[{ v: "ko", label: "한국어" }, { v: "en", label: "English" }]} onChange={(lang) => set((x) => ({ ...x, lang }))} /></Row>
 			<Row k={t("theme")}><Seg value={s.theme} options={[{ v: "system", label: t("themeSystem") }, { v: "dark", label: t("themeDark") }, { v: "light", label: t("themeLight") }]} onChange={(theme) => set((x) => ({ ...x, theme }))} /></Row>
 			<Row k={t("libraryDir")}>

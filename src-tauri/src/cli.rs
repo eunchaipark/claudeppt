@@ -121,7 +121,7 @@ fn run(cmd: &str, a: &Args) -> R<Value> {
 			let dir = deck_own(a)?;
 			let msg = a.get("m").ok_or("-m \"<메시지>\" 가 필요하다")?;
 			guard(&dir, a)?;
-			let c = vcs::vcs_commit(s(&dir), msg.into())?;
+			let c = vcs::vcs_commit(s(&dir), msg.into(), None)?;
 			refresh(&dir, "commit");
 			Ok(match c { Some(c) => json!(c), None => json!({ "unchanged": true }) })
 		}
@@ -505,7 +505,7 @@ fn restore(dir: &Path, a: &Args) -> R<Value> {
 		None => c["hash"].as_str().is_some_and(|h| h.starts_with(want)),
 	});
 	let c = hit.ok_or(format!("판을 찾지 못했다: {want}"))?;
-	let r = vcs::vcs_restore(s(dir), c["hash"].as_str().unwrap().into(), format!("v{} 판으로 되돌림", c["n"]))?;
+	let r = vcs::vcs_restore(s(dir), c["hash"].as_str().unwrap().into(), format!("v{} 판으로 되돌림", c["n"]), None)?;
 	refresh(dir, "restore");
 	Ok(json!(r))
 }

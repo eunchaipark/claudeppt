@@ -38,6 +38,8 @@ export interface Settings {
 	update: { auto: boolean; install: boolean };
 	/** 앱 밖 Claude Code 가 CLI 로 이 앱을 부리는 것을 받을지 (control.rs · remote.ts) */
 	remote: { enabled: boolean };
+	/** 이 기기를 쓰는 팀원 이름 — 대화의 요청과 판(git 작성자)에 남는다. 기기마다 한 번 정한다 */
+	me: string;
 }
 
 export const BASIC: Template = {
@@ -56,6 +58,7 @@ export const DEFAULTS: Settings = {
 	template: BASIC.id,
 	update: { auto: true, install: true },
 	remote: { enabled: true },
+	me: "",
 };
 
 export const templateId = () => "t" + Math.random().toString(36).slice(2, 8);
