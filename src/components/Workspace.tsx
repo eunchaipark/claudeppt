@@ -17,6 +17,7 @@ import { type Pin, useDeck } from "../lib/store";
 import { type MenuItem, openMenu } from "./ContextMenu";
 import { VersionBar, VersionLens } from "./VersionLens";
 import { SketchBoard } from "./Sketch";
+import { SlideFaces, StageFaces } from "./Collab";
 import Talk, { useTalkFold } from "./Talk";
 
 export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: { file: string; rev: number; width: number; height?: number; w: number; h: number; onWin?: (win: Window | null) => void; revHash?: string }) {
@@ -287,6 +288,7 @@ function Rail() {
 							<span>{i + 1}</span>
 							{n > 0 && <span className="pins" title={`${t("pins")} ${n}`} />}
 							{vs && <span className="drift">{vs === "added" ? t("vsAdded") : t("vsChangedOne")}</span>}
+							<SlideFaces slideId={sl.id} />
 							{!preview && <button className="at" onClick={() => mentionSlide(i + 1)} title={`${t("mention")} (@${i + 1})`} aria-label={`${t("mention")} @${i + 1}`}>@</button>}
 						</div>
 						<button className="thumb" draggable={!preview} onDragStart={(e) => { setDrag(i); dragSlide(e, sl.id); }} onDragEnd={() => { setDrag(null); setDropAt(null); }}
@@ -439,6 +441,7 @@ function Stage() {
 	return (
 		<section className="stage" data-mode={preview ? "view" : mode} aria-label={t("slides")}>
 			<div className="stage-banner">
+				<StageFaces slideId={slide.id} />
 				{compare && <VersionBar slideId={slide.id} />}
 				{preview && (
 					<div className="past" role="status">

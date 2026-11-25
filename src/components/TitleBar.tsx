@@ -7,8 +7,10 @@ import { useEffect, useRef, useState } from "react";
 import type { Commit } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { useDeck } from "../lib/store";
+import { remote } from "../lib/transport";
 import { useUpdate } from "../lib/updater";
 import { openMenu } from "./ContextMenu";
+import { CollabChip } from "./Collab";
 import DeckActions from "./DeckActions";
 
 export const Mark = () => (
@@ -27,10 +29,12 @@ export default function TitleBar({ onSettings, settingsOpen }: { onSettings: () 
 	const setFlow = useDeck((s) => s.setFlow);
 	const close = useDeck((s) => s.closeProject);
 	const saveDeck = useDeck((s) => s.saveDeck);
-	const win = getCurrentWindow();
+	// 협업 브라우저에는 창이 없다 — 창 단추 · 끌기는 호스트 앱만
+	const win = remote ? null : getCurrentWindow();
 	const [max, setMax] = useState(false);
 	const [list, setList] = useState(false);
 	useEffect(() => {
+		if (!win) return;
 		win.isMaximized().then(setMax);
 		const un = win.onResized(() => win.isMaximized().then(setMax));
 		return () => { un.then((f) => f()); };
@@ -40,18 +44,18 @@ export default function TitleBar({ onSettings, settingsOpen }: { onSettings: () 
 	const titleRef = useRef<HTMLInputElement>(null);
 
 	return (
-		<header className="titlebar" data-tauri-drag-region onDoubleClick={(e) => { if (e.target === e.currentTarget) win.toggleMaximize(); }}>
+		<header className="titlebar" data-tauri-drag-region onDoubleClick={(e) => { if (e.target === e.currentTarget) win?.toggleMaximize(); }}>
 			<div className="left" data-tauri-drag-region>
 				<Mark />
 				<div className="crumb">
 					{deck ? (
 						<>
-							<button className="crumb-home" onClick={close}>{t("home")}</button>
-							<span className="dim">/</span>
+							{!remote && <><button className="crumb-home" onClick={close}>{t("home")}</button><span className="dim">/</span></>}
 							<input
 								ref={titleRef}
 								className="title"
 								defaultValue={deck.title}
+								readOnly={remote}
 								key={deck.title}
 								size={Math.max(4, deck.title.length + 1)}
 								aria-label={t("name")}
@@ -86,18 +90,19 @@ export default function TitleBar({ onSettings, settingsOpen }: { onSettings: () 
 				)}
 			</div>
 			<div className="right" data-tauri-drag-region>
-				<UpdateChip />
-				{deck && <DeckActions />}
-				<button className={"tb-btn" + (settingsOpen ? " on" : "")} onClick={onSettings} title={t("settings") + " (Ctrl+,)"} aria-label={t("settings")}>
+				<CollabChip />
+				{!remote && <UpdateChip />}
+				{deck && !remote && <DeckActions />}
+				{!remote && <button className={"tb-btn" + (settingsOpen ? " on" : "")} onClick={onSettings} title={t("settings") + " (Ctrl+,)"} aria-label={t("settings")}>
 					<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><circle cx="10.5" cy="4.5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" /><circle cx="5.5" cy="11.5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
-				</button>
-				<div className="win">
+				</button>}
+				{win && <div className="win">
 					<button onClick={() => win.minimize()} aria-label={t("minimize")}><svg width="10" height="10" aria-hidden><path d="M0 5.5h10" stroke="currentColor" /></svg></button>
 					<button onClick={() => win.toggleMaximize()} aria-label={t("maximize")}>
 						{max ? <svg width="10" height="10" aria-hidden><path d="M2.5.5h7v7M.5 2.5h7v7h-7z" fill="none" stroke="currentColor" /></svg> : <svg width="10" height="10" aria-hidden><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor" /></svg>}
 					</button>
 					<button className="x" onClick={() => win.close()} aria-label={t("quit")}><svg width="10" height="10" aria-hidden><path d="M.5.5l9 9M9.5.5l-9 9" stroke="currentColor" /></svg></button>
-				</div>
+				</div>}
 			</div>
 		</header>
 	);

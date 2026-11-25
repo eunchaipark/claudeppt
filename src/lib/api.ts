@@ -1,5 +1,5 @@
-// 백엔드(src-tauri) 명령을 부르는 얇은 층. 이름은 Rust 명령과 같다.
-import { invoke } from "@tauri-apps/api/core";
+// 백엔드(src-tauri) 명령을 부르는 얇은 층. 이름은 Rust 명령과 같다. 길(Tauri · 협업 브라우저)은 transport.ts 가 고른다.
+import { call as invoke, remote } from "./transport";
 
 /** author — 이 판을 시킨 팀원 이름 (직접 편집 · 바깥 CLI 의 판은 ClaudePPT) */
 export interface Commit { n: number; hash: string; short: string; date: string; subject: string; tags: string[]; author: string }
@@ -61,9 +61,9 @@ export const api = {
 	pptSnapshot: (pptx: string, outDir: string, width = 1280, height = 720) => invoke<number>("ppt_snapshot", { pptx, outDir, width, height }),
 };
 
-/** 슬라이드 주소. Windows WebView2 는 사용자 프로토콜을 http://<이름>.localhost 로 연다. */
+/** 슬라이드 주소. Windows WebView2 는 사용자 프로토콜을 http://<이름>.localhost 로 연다. 협업 브라우저는 호스트 서버의 /_/deck */
 export const deckUrl = (id: string, rel: string, rev?: string) => {
-	const base = navigator.userAgent.includes("Windows") ? "http://deck.localhost" : "deck://localhost";
+	const base = remote ? `${location.origin}/_/deck` : navigator.userAgent.includes("Windows") ? "http://deck.localhost" : "deck://localhost";
 	return `${base}/${id}${rev ? "@" + rev : ""}/${rel.split("/").map(encodeURIComponent).join("/")}`;
 };
 

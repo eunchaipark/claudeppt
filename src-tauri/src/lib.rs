@@ -4,10 +4,12 @@
 //   AppState            열린 프로젝트(id → 폴더) · 감시기 · 실행 중인 Claude
 //   deck:// 프로토콜     슬라이드 HTML 에 런타임(rt.js)을 끼워 내준다 · <id>@<커밋> 이면 그 판의 파일을 git 에서 꺼낸다
 //   명령                 fs · project · vcs · claude · image · ppt 모듈에 있다
+//   팀 협업              collab.rs — 「설정 › 협업」을 켜면 브라우저 팀원에게 화면 · 슬라이드 · 상태를 내주는 서버 (기본 꺼짐)
 //   바깥 제어            control.rs — 앱 밖 Claude Code 가 CLI(cli.rs · 같은 실행 파일에 인자를 주어 부른다)로 앱을 부리는 통로
 
 pub mod cli;
 mod claude;
+mod collab;
 mod control;
 mod fonts;
 mod fsx;
@@ -44,6 +46,7 @@ pub fn run() {
 		.plugin(tauri_plugin_process::init())
 		.manage(AppState::default())
 		.manage(control::Control::new())
+		.manage(collab::Collab::default())
 		.setup(|app| {
 			// 통로를 못 열어도 앱은 그대로 쓴다 — 바깥 제어만 안 된다
 			if let Err(e) = control::start(app.handle()) {
@@ -93,6 +96,12 @@ pub fn run() {
 			control::remote_info,
 			control::remote_set_enabled,
 			control::skill_install,
+			collab::collab_start,
+			collab::collab_stop,
+			collab::collab_info,
+			collab::collab_publish,
+			collab::collab_reply,
+			collab::collab_view,
 		])
 		.build(tauri::generate_context!())
 		.expect("앱을 띄우지 못했다")

@@ -11,9 +11,10 @@ import { type Key, useT } from "../lib/i18n";
 import { rethemeCss, themeVars, writeDeck } from "../lib/deck";
 import { type ImageProvider, type Template, templateId, useSettings } from "../lib/settings";
 import { useDeck } from "../lib/store";
+import { CollabSettings } from "./Collab";
 import { useUpdate } from "../lib/updater";
 
-type Tab = "general" | "templates" | "claude" | "image" | "connect" | "update";
+type Tab = "general" | "templates" | "claude" | "image" | "connect" | "collab" | "update";
 
 function Seg<T extends string | number>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
 	return (
@@ -30,8 +31,8 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 export default function Settings({ onClose }: { onClose: () => void }) {
 	const t = useT();
 	const [tab, setTab] = useState<Tab>("general");
-	const tabs: Tab[] = ["general", "templates", "claude", "image", "connect", "update"];
-	const names: Record<Tab, Key> = { general: "general", templates: "templates", claude: "claude", image: "image", connect: "connect", update: "update" };
+	const tabs: Tab[] = ["general", "templates", "claude", "image", "connect", "collab", "update"];
+	const names: Record<Tab, Key> = { general: "general", templates: "templates", claude: "claude", image: "image", connect: "connect", collab: "collab", update: "update" };
 	return (
 		<div className="settings" role="dialog" aria-label={t("settings")}>
 			<nav>
@@ -45,6 +46,7 @@ export default function Settings({ onClose }: { onClose: () => void }) {
 				{tab === "claude" && <Claude />}
 				{tab === "image" && <Images />}
 				{tab === "connect" && <Connect />}
+				{tab === "collab" && <CollabSettings />}
 				{tab === "update" && <Update />}
 			</div>
 		</div>

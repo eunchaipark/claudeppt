@@ -1,6 +1,10 @@
 // 앱 설정 — %APPDATA%/com.seesun.claudeppt/settings.json 한 파일. 모양은 여기서 정하고 Rust 는 읽고 쓰기만 한다.
 import { create } from "zustand";
 import { api } from "./api";
+import { remote } from "./transport";
+
+/** 협업 브라우저의 설정 — 그 브라우저에만 남긴다 (이름 · 말 · 테마). 호스트 설정 파일은 원격에서 읽지도 쓰지도 않는다 */
+const REMOTE_KEY = "claudeppt.remote.settings";
 
 export type ImageProvider = "svg" | "codex-cli" | "gemini-cli" | "openai" | "gemini";
 
@@ -103,6 +107,13 @@ export const useSettings = create<Store>()((set, get) => ({
 	s: DEFAULTS,
 	loaded: false,
 	load: async () => {
+		if (remote) {
+			let raw: any = null;
+			try { raw = JSON.parse(localStorage.getItem(REMOTE_KEY) || "null"); } catch {}
+			const s = merge(raw);
+			if (!raw?.lang && !navigator.language.startsWith("ko")) s.lang = "en";
+			return set({ s, loaded: true });
+		}
 		const raw = await api.settingsLoad().catch(() => null);
 		const s = merge(raw);
 		if (!s.library) s.library = (await api.paths()).library;
@@ -112,6 +123,10 @@ export const useSettings = create<Store>()((set, get) => ({
 		const s = fn(get().s);
 		set({ s });
 		clearTimeout(saveTimer);
+		if (remote) {
+			try { localStorage.setItem(REMOTE_KEY, JSON.stringify({ me: s.me, lang: s.lang, theme: s.theme })); } catch {}
+			return;
+		}
 		saveTimer = setTimeout(() => api.settingsSave(s).catch(() => {}), 300);
 	},
 	remember: (dir) => get().set((s) => ({ ...s, recent: [dir, ...s.recent.filter((d) => d !== dir)].slice(0, 12) })),

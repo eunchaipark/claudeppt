@@ -3,6 +3,7 @@
 // 끌고 들어오는 동안 무엇을 놓는지(파일 이름)와 놓으면 어떻게 되는지를 판 하나로 보인다.
 // 2026.11.20 : 빨간 점선 테두리에 빨간 글자 한 줄이던 것을 차분한 안내 판으로 바꿨다. 처음 화면 · 작업 화면에 따로 있던 것을 여기 하나로 모았다.
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { remote } from "../lib/transport";
 import { useEffect, useState } from "react";
 import { attachable, useAttach } from "../lib/attach";
 import { importFile, openAny } from "../lib/flows";
@@ -39,6 +40,8 @@ export default function DropZone() {
 	const deckOpen = useDeck((s) => !!s.deck);
 	const [paths, setPaths] = useState<string[] | null>(null);
 	useEffect(() => {
+		// 협업 브라우저에는 이 PC 의 파일 경로가 없다 — 끌어 놓기는 호스트 앱만
+		if (remote) return;
 		const un = getCurrentWebview().onDragDropEvent((e) => {
 			const p = e.payload;
 			// 글자 · 그림 조각을 끌 때도 enter 가 온다 — 파일이 없으면 판을 띄우지 않는다

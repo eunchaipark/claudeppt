@@ -21,6 +21,7 @@ import { SLIDE_MIME, SlideFrame } from "./Workspace";
 import { useSettings } from "../lib/settings";
 import { routeOf, type Turn, useDeck } from "../lib/store";
 import { noteDraft } from "../lib/updater";
+import { remote } from "../lib/transport";
 
 /** 사이드바 접힘 — 보는 사람의 편의라 이 PC 에만 남긴다. seen 은 접을 때 본 마지막 턴(그 뒤 끝난 턴이 「새 답」) */
 interface Fold { folded: boolean; seen: string | null; draft: boolean; set: (v: boolean) => void }
@@ -588,9 +589,9 @@ function ScopeLine({ text, setText, ta }: { text: string; setText: (v: string) =
 				})
 			)}
 			<button className="scope-btn at" onClick={pickSlide} title={t("scopePick")} aria-label={t("scopePick")}>@</button>
-			<button className="scope-btn clip" onClick={choose} title={t("attachAdd")} aria-label={t("attachAdd")}>
+			{!remote && <button className="scope-btn clip" onClick={choose} title={t("attachAdd")} aria-label={t("attachAdd")}>
 				<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden><path d="M10.5 4.5 5.4 9.6a1.6 1.6 0 0 0 2.3 2.3l5.4-5.4a3 3 0 0 0-4.3-4.3L3.3 7.7a4.4 4.4 0 0 0 6.2 6.2l4-4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-			</button>
+			</button>}
 		</div>
 	);
 }

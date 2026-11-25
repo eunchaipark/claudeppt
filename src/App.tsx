@@ -7,7 +7,9 @@ import Settings from "./components/Settings";
 import TitleBar from "./components/TitleBar";
 import Workspace from "./components/Workspace";
 import { useT } from "./lib/i18n";
+import { connect, resumeHost, useCollab } from "./lib/collab";
 import { startRemote } from "./lib/remote";
+import { remote } from "./lib/transport";
 import { useSettings } from "./lib/settings";
 import { useDeck } from "./lib/store";
 import { resumeAfterUpdate, useAutoUpdate } from "./lib/updater";
@@ -38,12 +40,15 @@ export default function App() {
 	useTheme();
 	useAutoUpdate(loaded);
 	// 앱 밖 Claude Code 의 CLI 명령을 받기 시작한다 — 저장 폴더 · 템플릿을 읽은 뒤라야 새 덱을 만든다
-	useEffect(() => { if (loaded) startRemote().catch((e) => console.error("제어 통로", e)); }, [loaded]);
+	useEffect(() => { if (loaded && !remote) startRemote().catch((e) => console.error("제어 통로", e)); }, [loaded]);
 	// 업데이트를 설치하며 다시 켰으면 그때 열려 있던 덱을 다시 연다
-	useEffect(() => { if (loaded) resumeAfterUpdate(); }, [loaded]);
+	useEffect(() => { if (loaded && !remote) resumeAfterUpdate(); }, [loaded]);
+	// 협업 브라우저 — 호스트 서버에 붙어 덱 · 대화를 받는다 (collab.ts)
+	useEffect(() => { if (loaded && remote) connect(); }, [loaded]);
+	useEffect(() => { if (loaded && !remote) resumeHost().catch(() => {}); }, [loaded]);
 	useEffect(() => {
 		const k = (e: KeyboardEvent) => {
-			if (e.ctrlKey && e.key === ",") { e.preventDefault(); setSettings((v) => !v); }
+			if (e.ctrlKey && e.key === "," && !remote) { e.preventDefault(); setSettings((v) => !v); }
 			if (e.key === "Escape" && settings) setSettings(false);
 			// 되돌리기 · 다시 하기 — 글 칸 안에서는 그 칸의 되돌리기를 쓴다
 			const z = e.key.toLowerCase();
@@ -68,7 +73,7 @@ export default function App() {
 			<TitleBar onSettings={() => setSettings((v) => !v)} settingsOpen={settings} />
 			{/* 제목 줄 밖에서 오류를 받는다 — 제목 줄이 남아야 창을 닫거나 옮길 수 있다 */}
 			<Crash>
-				{open ? <Workspace /> : <Home />}
+				{open ? <Workspace /> : remote ? <RemoteWaiting /> : <Home />}
 				{settings && <Settings onClose={() => setSettings(false)} />}
 			</Crash>
 			<Toasts />
@@ -110,5 +115,16 @@ function Toasts() {
 				</div>
 			)}
 		</>
+	);
+}
+
+/** 협업 브라우저 — 호스트가 덱을 열기 전 · 연결이 끊긴 동안 */
+function RemoteWaiting() {
+	const t = useT();
+	const { connected, ended } = useCollab();
+	return (
+		<main className="remote-wait">
+			<p>{ended ? t("collabEnded") : connected ? t("collabWaiting") : t("collabOffline")}</p>
+		</main>
 	);
 }

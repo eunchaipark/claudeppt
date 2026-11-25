@@ -25,7 +25,7 @@ tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 # preserve_order — CLI 가 deck.json 을 고쳐 쓸 때 키 순서를 지킨다. 안 지키면 판 비교에 키 순서만 바뀐 줄이 섞인다
 serde_json = { version = "1", features = ["preserve_order"] }
-tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread", "net"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 dirs = "6"
@@ -40,6 +40,8 @@ base64 = "0.22"
 percent-encoding = "2"
 # 우클릭 메뉴의 「붙여 넣기」 — 웹뷰의 navigator.clipboard.readText 는 권한을 묻다 멈춘다
 arboard = { version = "3", default-features = false }
+# 팀 협업 서버 (collab.rs) — 「설정 › 협업」을 켜면 브라우저 팀원에게 화면 · 슬라이드 · 상태를 HTTP + WebSocket 으로 내준다
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws", "json", "query"] }
 
 [target.'cfg(windows)'.dependencies]
 # claude 를 앱이 쥔 job 에 넣어, 앱이 어떻게 꺼지든(닫기 · 업데이트 설치 · 강제 종료) 함께 끈다 (claude.rs). tauri 가 이미 쓰는 판이라 새로 받는 것은 없다

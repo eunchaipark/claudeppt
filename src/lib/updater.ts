@@ -15,8 +15,10 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useAttach } from "./attach";
+import { useCollab } from "./collab";
 import { useSettings } from "./settings";
 import { OUTSIDE_MS, useDeck } from "./store";
+import { remote } from "./transport";
 
 const CHECK_EVERY_MS = 60 * 60 * 1000;
 const STALE_MS = 30 * 60 * 1000;
@@ -118,12 +120,14 @@ let drafting = false;
 export const noteDraft = (on: boolean) => { drafting = on; };
 
 /** 지금 설치하면 끊기는 일 — 있으면 그 까닭, 없으면 null */
-export function holdsUpdate(): "work" | "draft" | "outside" | null {
+export function holdsUpdate(): "work" | "draft" | "outside" | "members" | null {
 	const d = useDeck.getState();
 	if (d.running || d.busy || d.jobs.length) return "work";
 	// 보내지 않은 요청 글 · 첨부는 다시 켜면 사라진다 (핀은 덱에 남아 그대로다)
 	if (drafting || useAttach.getState().files.length) return "draft";
 	if (d.outside && Date.now() - d.outside.at < OUTSIDE_QUIET_MS) return "outside";
+	// 협업으로 팀원이 붙어 있으면 — 다시 켜는 동안 모두 끊긴다
+	if (useCollab.getState().members.some((m) => !m.host)) return "members";
 	return null;
 }
 
@@ -141,7 +145,7 @@ export function useAutoUpdate(ready: boolean) {
 	const auto = useSettings((s) => s.s.update.auto);
 	const autoInstall = useSettings((s) => s.s.update.install);
 	useEffect(() => {
-		if (!ready || !auto || import.meta.env.DEV) return;
+		if (!ready || !auto || import.meta.env.DEV || remote) return;
 		useUpdate.getState().run(true);
 		const t = setInterval(() => useUpdate.getState().run(true), CHECK_EVERY_MS);
 		// 잠자기 · 오래 다른 창에 있다 오면 타이머가 밀린다 — 돌아온 때 한 번 본다
@@ -150,7 +154,7 @@ export function useAutoUpdate(ready: boolean) {
 		return () => { clearInterval(t); removeEventListener("focus", back); };
 	}, [ready, auto]);
 	useEffect(() => {
-		if (!ready || !autoInstall || import.meta.env.DEV) return;
+		if (!ready || !autoInstall || import.meta.env.DEV || remote) return;
 		const evs = ["pointerdown", "keydown", "wheel"] as const;
 		evs.forEach((e) => addEventListener(e, touched, true));
 		// 슬라이드 창(iframe)을 누르면 이 창에 blur 가 온다 — 그때는 떠난 것이 아니다. 포커스가 앱 밖으로 갔을 때만 센다
