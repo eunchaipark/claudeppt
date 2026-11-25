@@ -178,7 +178,9 @@ function apply(patch: any, full: boolean) {
 export function connect() {
 	if (!remote || ws) return;
 	const open = () => {
-		ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/_/ws`);
+		// 한 화면에 연결은 하나 — 개발 중 모듈이 다시 읽히면(HMR) 옛 연결이 남아 같은 사람이 둘로 보였다
+		(window as any).__cpptWs?.close();
+		ws = (window as any).__cpptWs = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/_/ws`);
 		ws.onopen = () => { retry = 0; useCollab.setState({ connected: true, ended: false }); hello(); };
 		ws.onmessage = (e) => {
 			const m = JSON.parse(e.data);
