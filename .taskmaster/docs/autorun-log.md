@@ -71,3 +71,16 @@
   - **진짜 Claude 2턴**(시험 동안만 sonnet · low, 끝나고 opus · xhigh 로 되돌림): 1턴의 세션 id = 앱이 정한 uuid · 기록 두 곳(40574바이트) → claude 쪽 기록을 지움(다른 PC 흉내) → 2턴(민수) `--resume` 성공, 답 「은채 님이 1쪽 제목 글자를 「세션 복구 시험」으로 바꿔 달라고 요청했습니다」 — 맥락 · 시킨 사람 유지
   - 가짜 Claude: resume 이 `No conversation found` 로 실패 → 요약(은채 · 민수 요청과 답, 고친 파일) 붙여 새 id 로 다시 → 턴 「done」, 오류 없음, 알림, 다음 요청은 새 id 로 resume (`shots/c3-recover.png`)
 - 확인하지 못한 것: 실제로 다른 PC 에서 .cppt 를 풀어 잇기(같은 PC 에서 기록을 지워 흉내 냄) · CLAUDE_CONFIG_DIR 을 쓰는 환경
+
+## collab #4 — claude 찾기 보강 · 앱이 꺼지면 claude 도 끄기 (19:06 ~ 19:13)
+
+- 브랜치: `fix/claude-find-and-cleanup` (fork main 위) → **원본 PR a7garden/claudeppt#5** · collab 합침 `0287fb0`
+- 바꾼 것
+  - claude 를 앱이 쥔 Windows job(`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`)에 넣음 → 창 닫기 · 업데이트 설치 · 강제 종료 · 죽음 어떤 경우든 OS 가 claude 와 자식까지 끔. RunEvent 처리로는 업데이트 설치(앱을 바로 끝냄) · 강제 종료를 못 잡아서 job 으로 감
+  - claude 찾기: PATH(where) → `%USERPROFILE%\.local\bin` → npm 전역 → WinGet Links → Scoop shims. 찾은 경로 기억(없어지면 다시 찾음)
+  - `windows-sys` 0.61 직접 의존(이미 tauri 가 쓰는 판, 새 다운로드 없음)
+- 시험
+  - `cargo test --lib`: 새 2개(찾는 자리 · 순서 / job 을 닫으면 cmd→ping 꺼짐) 포함 fix 10개 · collab 9개 통과, 경고 0
+  - 개발 실행: 설정 claude 경로를 잠시 가짜 claude(`cmd` → `ping -n 120`)로 바꿔 턴을 띄우고(보낸 뒤 설정은 바로 되돌림) 앱 프로세스를 강제 종료 — **고치기 전: cmd · conhost · PING 살아남음(손으로 끔) / 고친 뒤: 모두 꺼짐**
+  - 설정 파일 확인: claude 경로 "" · opus · xhigh · 이름 은채 그대로
+- 확인하지 못한 것: 실제 업데이트 설치 흐름(설치 판 필요) · WinGet/Scoop 으로 깐 PC

@@ -169,12 +169,13 @@
         "id": "4",
         "title": "[C0] claude 실행 파일 찾기 보강 · 앱을 꺼도 claude 가 남는 문제",
         "description": "where claude 만 써서 ~/.local/bin 설치를 못 찾고, 창을 닫아도 claude 프로세스가 계속 돈다. master #2 · #3.",
-        "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:13] fix/claude-find-and-cleanup 7?? → 원본 PR a7garden/claudeppt#5 · collab 합침 0287fb0. job object(KILL_ON_JOB_CLOSE)로 claude 와 자식까지 앱과 함께 끝남 · claude 찾기 PATH→네이티브/npm/WinGet/Scoop 자리, 찾은 경로 기억. 시험: cargo test 2개(찾는 자리 순서 · job 닫으면 cmd→ping 꺼짐) · 개발 실행 가짜 claude(cmd→ping) 턴 중 앱 강제 종료: 고치기 전 cmd·conhost·PING 살아남음 / 고친 뒤 모두 꺼짐. 확인 못 함: 실제 업데이트 설치 흐름, WinGet·Scoop 설치 PC",
         "testStrategy": "PATH 에 ~/.local/bin 없이 앱을 띄워 claude 를 찾는지, 턴 도중 창을 닫았을 때 claude.exe 가 남지 않는지(Get-Process)",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:13:43.528Z"
       },
       {
         "id": "5",
@@ -350,9 +351,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T10:06:20.065Z",
+      "lastModified": "2026-11-25T10:13:43.348Z",
       "taskCount": 17,
-      "completedCount": 3,
+      "completedCount": 4,
       "tags": [
         "collab"
       ]
