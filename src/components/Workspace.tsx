@@ -27,11 +27,18 @@ export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: {
 	const frames = useDeck((s) => s.frames);
 	const mode = useDeck((s) => s.mode);
 	const ref = useRef<HTMLIFrameElement>(null);
+	// 읽힌 창 — 떼어 낼 때는 iframe.contentWindow 가 이미 null 이라 그것으로는 frames 에서 지우지 못하고 쌓였다
+	const winRef = useRef<Window | null>(null);
 	const s = width / w;
 	const src = deckUrl(id, file, revHash) + `?v=${rev}`;
 	useEffect(() => {
 		const f = ref.current;
-		return () => { if (f?.contentWindow) frames.delete(f.contentWindow); onWin?.(null); };
+		return () => {
+			const win = winRef.current ?? f?.contentWindow;
+			if (win) frames.delete(win);
+			winRef.current = null;
+			onWin?.(null);
+		};
 	}, [src]);
 	return (
 		<iframe
@@ -46,6 +53,7 @@ export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: {
 			onLoad={() => {
 				const win = ref.current?.contentWindow;
 				if (!win) return;
+				winRef.current = win;
 				frames.add(win);
 				win.postMessage({ __deck: 1, t: "mode", mode: onWin ? mode : "view" }, "*");
 				onWin?.(win);

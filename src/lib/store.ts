@@ -691,6 +691,8 @@ export const useDeck = create<S>()((set, get) => ({
 		const { id } = get();
 		if (id) await api.close(id).catch(() => {});
 		set({ dir: "", id: "", deck: null, turns: [], sessions: [], bind: {}, talkKey: null, pins: [], versions: [], preview: null, running: null, runs: {}, vdiff: null });
+		// 닫은 덱의 슬라이드 창은 더 말을 받지 않는다 — 남은 것을 비운다
+		get().frames.clear();
 	},
 
 	setCurrent: (i) => set({ current: Math.max(0, Math.min(i, (get().deck?.slides.length || 1) - 1)) }),
