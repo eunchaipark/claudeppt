@@ -231,3 +231,9 @@
 - 브랜치: `perf/frames-leak` → **원본 PR a7garden/claudeppt#10** · collab 에도 같은 변경
 - 바꾼 것: SlideFrame 이 onLoad 때 창을 잡아 두고 떼어 낼 때 그것으로 frames 에서 지움 · 덱을 닫을 때 frames 비움
 - 잰 것(쪽 둘을 20번 오감 + 모든 쪽 다시 그리기 5번): **고치기 전 frames 4 → 28 / 고친 뒤 3 → 3**(DOM iframe 3개와 같음) · 무대 창은 등록된 채 · 닫으면 0
+
+## master #10 — 굽기 글꼴 줄이기 (~ 23:38)
+
+- 브랜치: `perf/bake-fonts` → **원본 PR a7garden/claudeppt#11** · collab 같은 변경(rt.js)
+- 바꾼 것: @font-face 를 가족별로 모으고 data: 변환은 처음 쓸 때 한 번 · 굽는 요소 안 글자가 쓰는 가족만(얕은 굽기는 ::before/::after 만) · 글자 없으면 글꼴 없음
+- 잰 것(시험 덱에 흐림 장식 8개 + 제목 쪽): PPTX 내보내기 **1.3~1.4초 → 0.38~0.41초**. 구운 그림 8개 바이트 같음, 「똑같이」 내보내기의 글자 있는 쪽 그림도 고치기 전과 바이트 같음(Pretendard 그대로)

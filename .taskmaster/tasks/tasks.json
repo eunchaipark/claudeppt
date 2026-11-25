@@ -29,12 +29,13 @@
         "id": "10",
         "title": "[M0] [성능] 굽기(bake)마다 넣는 2.8MB 글꼴 줄이기",
         "description": "fontCss() 가 모든 @font-face 를 base64 data URL 로 바꿔 bake 마다 SVG 에 통째로 넣는다.",
-        "details": "rt.js:228-237, 308-309. 복제본에 글자가 없으면(img · svg · 바탕만) 글꼴 서식 생략. 하위 트리 계산 fontFamily 에 나오는 가족만. 부모가 한 번 만들어 extract 메시지로 넘기기. 「숨은 iframe 이 답하지 않는다」 20s 시간 초과와의 관계도 확인. [0.6.0 재검증] 유효. rt.js:304-313 fontCss, :385.",
+        "details": "rt.js:228-237, 308-309. 복제본에 글자가 없으면(img · svg · 바탕만) 글꼴 서식 생략. 하위 트리 계산 fontFamily 에 나오는 가족만. 부모가 한 번 만들어 extract 메시지로 넘기기. 「숨은 iframe 이 답하지 않는다」 20s 시간 초과와의 관계도 확인. [0.6.0 재검증] 유효. rt.js:304-313 fontCss, :385.\n\n[완료 23:38] perf/bake-fonts → 원본 PR #11 · collab 같은 변경. 가족별 글꼴 · 처음 쓸 때 data: · 글자 쓰는 가족만. 잰 것: 흐림 장식 8개 덱 내보내기 1.3~1.4s → 0.38~0.41s, 구운 그림 바이트 같음(장식 8 · 글자 있는 쪽 통째)",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:38:06.080Z"
       },
       {
         "id": "12",
@@ -118,9 +119,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:34:23.468Z",
+      "lastModified": "2026-11-25T14:38:05.859Z",
       "taskCount": 10,
-      "completedCount": 4,
+      "completedCount": 5,
       "tags": [
         "master"
       ]
