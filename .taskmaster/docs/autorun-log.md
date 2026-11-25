@@ -140,3 +140,11 @@
   - curl: 쿠키 없음 401 · 옛 `?k=` 401 · 공용 링크 이름 화면 · 없는 링크 403(영어) · 빈 이름 다시 묻기 · 이름 → 303 + 기기 쿠키 · 쿠키로 화면 200 · 쿠키 있는 채 링크 → `/` · collab.json 에 기기 열쇠 없음(해시만)
   - Edge 프로필 셋: 공용 링크 → 이름 화면(`shots/c10-join.png`) → 「민수」로 들어옴(이름 칸 없음, 이름 고정) · 개인 링크 → 「지호」로 바로 · 잠금 중 새 사람 → 「호스트가 회의를 잠갔습니다」, 민수는 새로 고쳐도 그대로 · 지호 내보내기 → 즉시 「호스트가 내보냈습니다」(`c10-kicked.png`), 새로 고침 401 · 협업 껐다 켜기, 앱 다시 띄우기 뒤 민수 저절로 다시 붙음 · 설정 화면(`c10-settings.png`)
 - 확인하지 못한 것: 다른 PC · 휴대폰에서 링크 열기
+
+## collab #11 — 바깥 길 자동 (19:58 ~ 20:04) — **blocked: 도구 없음**
+
+- 브랜치: collab (커밋 「깔린 Tailscale · cloudflared 로 바깥 길을 열어…」)
+- 만든 것: `tunnel.rs` — 감지(where + 깐 자리) · Tailscale Funnel(`funnel --bg --https=443 http://127.0.0.1:<포트>`, 주소는 `status --json` 의 DNSName, 끌 때 `--https=443 off`) · cloudflared quick tunnel(`tunnel --no-autoupdate --url …`, 주소는 stderr, 앱 job 에 넣어 앱과 함께 꺼짐). 협업을 켤 때 도구가 있으면 저절로 엶 → 그 주소가 초대 링크 첫 주소 · 제목 줄 「바깥 열림 · n명」. 바깥 주소 Origin 도 같은 출처로 받음. 설정 › 협업 › 바깥에서도(열림/닫힘/도구 없음 안내)
+- 시험: `cargo test` tunnel 3개(quick tunnel 줄 읽기 · tailscale 이름 · **가짜 cloudflared(.cmd)로 띄우기 → 주소 읽기 → 끄기 후 프로세스 없음**) · collab Origin(바깥 주소) · 개발 실행: 도구 없음 → 안내 글(`shots/c11-settings.png`), 강제로 열면 「Tailscale 도 cloudflared 도 깔려 있지 않다」
+- **막힌 까닭**: 이 PC 에 tailscale · cloudflared 가 없다. 남의 프로그램을 받아 깔고 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않았다
+- 사용자가 할 일: `winget install Cloudflare.cloudflared`(계정 필요 없음) 또는 Tailscale 설치 + 관리 화면에서 Funnel 허락 → 앱에서 협업 켜기 → 휴대폰(LTE)으로 링크 열기 → 대화 글자가 흐르는지(WebSocket 이 터널을 지나는지)
