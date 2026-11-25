@@ -323,14 +323,15 @@
         "id": "15",
         "title": "[C4] 공유 의견 — 핀 · 표시를 작성자 있는 의견으로",
         "description": "팀원끼리 피드백. 핀 · 표시에 작성자 · 해결 상태, 모두에게 보임, 「이 장표 세션에 보내기」.",
-        "details": "pins.json 을 호스트가 한 곳에서 고치고 사건으로. 의견 목록(열림 · 해결), 받은 의견 알림. 「세션에 보내기」는 지금 핀이 요청칸 위에 쌓여 함께 가는 흐름 재사용 + 의견 작성자를 요청에 적음(「C 의견 반영」). 바깥 CLI 가 읽는 핀 꼴은 지킨다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "pins.json 을 호스트가 한 곳에서 고치고 사건으로. 의견 목록(열림 · 해결), 받은 의견 알림. 「세션에 보내기」는 지금 핀이 요청칸 위에 쌓여 함께 가는 흐름 재사용 + 의견 작성자를 요청에 적음(「C 의견 반영」). 바깥 CLI 가 읽는 핀 꼴은 지킨다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:44] collab 106e2a1. Pin{by,done} · isMine · 의견 의도 5종 · sendPin · 의견 목록 · 알림 · 무대 남의 핀 읽기 전용 · CLI pins 해결 제외+by. 시험: 민수(브라우저)·은채(호스트) 서로 의견 → 서로 알림, 요청칸 위엔 각자 제 핀만, 「의견 2」, 민수가 은채 의견 세션에 보내기 → 턴 요청 「은채 님이 남긴 의견을 반영해 줘」 보낸 사람 민수 · 프롬프트 (comment by 은채), 은채가 민수 의견 해결 → 무대 · 점에서 사라짐 · 파일 done · 해결됨 목록, CLI pins 가 해결된 것 빼고 by 줌",
         "testStrategy": "두 탭에서 의견 남기기 · 해결 · 세션에 보내기 → 턴에 의견 작성자",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "12"
         ],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T11:44:49.820Z"
       },
       {
         "id": "16",
@@ -361,9 +362,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T11:39:43.869Z",
+      "lastModified": "2026-11-25T11:44:49.634Z",
       "taskCount": 17,
-      "completedCount": 13,
+      "completedCount": 14,
       "tags": [
         "collab"
       ]
