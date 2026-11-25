@@ -148,3 +148,18 @@
 - 시험: `cargo test` tunnel 3개(quick tunnel 줄 읽기 · tailscale 이름 · **가짜 cloudflared(.cmd)로 띄우기 → 주소 읽기 → 끄기 후 프로세스 없음**) · collab Origin(바깥 주소) · 개발 실행: 도구 없음 → 안내 글(`shots/c11-settings.png`), 강제로 열면 「Tailscale 도 cloudflared 도 깔려 있지 않다」
 - **막힌 까닭**: 이 PC 에 tailscale · cloudflared 가 없다. 남의 프로그램을 받아 깔고 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않았다
 - 사용자가 할 일: `winget install Cloudflare.cloudflared`(계정 필요 없음) 또는 Tailscale 설치 + 관리 화면에서 Funnel 허락 → 앱에서 협업 켜기 → 휴대폰(LTE)으로 링크 열기 → 대화 글자가 흐르는지(WebSocket 이 터널을 지나는지)
+
+## collab #12 — 브라우저에서 Claude 에게 요청 (20:04 ~ 20:18)
+
+- 브랜치: collab (커밋 「브라우저 팀원이 대화칸에서 Claude 에게 요청하고…」)
+- 바꾼 것
+  - 호스트 의도 처리기 `send` · `stop` · `newTalk` · `upload`. `send(text, att, force, from)` — from = { by(서버가 정한 이름), 그 팀원이 보던 쪽, 그 팀원의 지금 대화, 핀, onStart }. routeOf 그대로, 호스트가 보는 대화 · 핀은 그대로. 턴이 서면 바로 세션을 돌려줘 브라우저 대화칸이 그리로
+  - 브라우저 「새 대화」는 호스트의 지금 대화를 바꾸지 않음
+  - 원격 첨부: 붙여 넣기 → 호스트 `.claudeppt/attach/` (그림 · PDF · 글, 10MB). 요청엔 그 경로만 받음
+  - **경쟁 상태 고침**: send 가 「도는 중」을 본 뒤 턴을 세우기까지 판 남기기를 기다리는 틈에 다른 요청이 끼어들어 한 세션에 턴 둘이 돌았다 → send 를 문 하나로(`isSending`), 협업 처리기도 봄
+  - 세션 id 가 UUID 가 아니면 claude 가 「--resume requires a valid session ID」를 낸다 → 이것도 기록을 잃은 것으로 보고 요약으로 새로 이음
+- 시험(Edge 「민수」 · 호스트 「은채」)
+  - 가짜 Claude: 브라우저 새 대화 → s2(호스트는 s1 그대로) · 2쪽에 요청 → s2, 2쪽이 s2 에 확정, 판 작성자 민수 · 호스트가 2쪽 「이 쪽 글자를 키워」 → s2 를 잇고 알림 · 턴 도는 중 브라우저 요청 → 「Claude 가 다른 요청을 처리하는 중입니다」 · 원격 첨부 note.txt → 호스트 파일 내용 · 턴 첨부 · 프롬프트 OK, evil.exe 거절 · 동시 두 요청 → claude 한 번만
+  - **진짜 Claude(시험 동안만 sonnet · low, 끝나고 opus · xhigh 로 되돌림)**: 브라우저에서 「1쪽 제목 아래 부제」 → 세션 기록이 없어 요약으로 새 세션 → 완료, 1쪽에 부제, 판 v6 작성자 민수(`shots/c12-remote.png`)
+  - 시험 중 찾은 것: 개발 중 HMR 로 모듈이 두 벌 올라오면 의도 처리기도 둘이 되어 같은 요청이 두 번 처리됐다(부제가 두 번 들어감) — 개발 전용 현상이지만 그 틈을 막는 경쟁 상태 고침을 넣었다
+- 확인하지 못한 것: 다른 PC 브라우저 · 큰 첨부(수 MB) 전송 시간

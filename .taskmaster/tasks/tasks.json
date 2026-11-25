@@ -279,15 +279,16 @@
         "id": "12",
         "title": "[C3] 브라우저에서 Claude 에게 요청 — 호스트 계정으로",
         "description": "팀원이 브라우저 대화칸에서 보낸다. 장표 세션 규칙(routeOf)대로 이어지고, 보낸 사람 = 링크 이름. Claude 는 호스트 계정.",
-        "details": "원격 send 의도 → 호스트가 routeOf · 세션 · 판 작성자를 그대로 처리. 턴 글자 · 상태 · 세션 목록이 모든 화면에 사건으로. 첨부(0.7.0)는 원격에서 올린 파일을 호스트 .claudeppt/attach 로. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "원격 send 의도 → 호스트가 routeOf · 세션 · 판 작성자를 그대로 처리. 턴 글자 · 상태 · 세션 목록이 모든 화면에 사건으로. 첨부(0.7.0)는 원격에서 올린 파일을 호스트 .claudeppt/attach 로. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:18] collab bc550f9. 의도 send/stop/newTalk/upload · SendFrom(by·current·talkKey·pins·onStart) · 호스트 대화/핀 그대로 · 원격 첨부 10MB · send 문 하나(경쟁 상태 고침) · 잘못된 세션 id 도 복구. 시험: 가짜 Claude — 원격 새 대화 s2(호스트 s1 그대로), 원격 요청 → s2 · 2쪽 s2 확정 · 판 작성자 민수, 호스트가 2쪽 고치면 s2 잇기 + 알림, 바쁠 때 원격 → 「다른 요청 처리 중」, 원격 첨부 → 호스트 파일 · 턴 첨부 · 프롬프트, .exe 거절, 동시 두 요청 → 하나만. 진짜 Claude(sonnet low): 브라우저 민수 요청 → 기록 없는 세션 → 요약으로 새 세션 → 1쪽 부제 들어감 · 판 v6 작성자 민수",
         "testStrategy": "가짜 claudeRun 으로 브라우저 탭 둘에서 번갈아 요청 → 세션 · 보낸 사람 · 판 작성자 확인, 진짜 Claude 1턴",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "8",
           "10"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T11:18:35.749Z"
       },
       {
         "id": "13",
@@ -358,9 +359,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T11:04:48.339Z",
+      "lastModified": "2026-11-25T11:18:35.550Z",
       "taskCount": 17,
-      "completedCount": 10,
+      "completedCount": 11,
       "tags": [
         "collab"
       ]
