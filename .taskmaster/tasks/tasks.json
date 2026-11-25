@@ -2,83 +2,6 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
-        "title": "[M0] [고장] --resume 실패 시 세션 복구 + 「새 대화」 단추",
-        "description": "세션을 못 찾으면 sessionId 를 비우고 새 세션으로 다시 돌린다. 지금은 비우는 길이 없어 덱이 영영 턴을 못 돈다.",
-        "details": "뿌리: 세션 기록은 ~/.claude/projects/<작업 폴더 이름>/<id>.jsonl 에만 있어 덱 폴더를 옮기거나 .cppt 로 넘기면 --resume 이 실패하고, sessionId 를 비우는 길(store.ts:302,312)이 없어 그 덱은 영영 턴을 못 돈다. 고침: (1) 세션 id 를 앱이 정한다 — 처음은 --session-id <uuid>, 이후 --resume (init 사건을 기다리지 않음). (2) 턴이 끝날 때 jsonl 을 .claudeppt/sessions/<id>.jsonl 로 복사, 덱을 열 때 ~/.claude 쪽에 없으면 되돌려 놓는다(복사 뒤 --resume 이 되는지 먼저 실험). (3) 그래도 실패하면(stderr 'No conversation found with session ID') sessionId 를 새로 만들고 최근 몇 턴 요약을 앞에 붙여 한 번 재시도. (4) 대화 머리에 「새 대화」 단추. (5) pack 은 세션 jsonl 을 넣을지 고르게. 협업 0.8 구역 세션이 같은 장치를 쓴다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. 새 위치: store.ts:375·384 sessionId 채우기만, claude.rs:125-127 --resume, 「새 대화」 단추 없음.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
-        "id": "2",
-        "title": "[M0] [고장] claude 실행 파일 탐색 보강",
-        "description": "where claude 만 쓰는 탓에 ~/.local/bin(네이티브 설치 자리)이 PATH 에 없으면 못 찾는다. 이 PC 가 그렇다.",
-        "details": "claude.rs:32-54 resolve(). 순서: 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → %APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe → %LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\claude.exe → HKCU\\Environment Path 다시 읽기. 찾은 경로는 AppState 에 기억(지금은 턴마다 동기 where 를 띄워 tokio 일꾼을 막는다). imagegen.rs 의 which 도 같은 도우미로. [0.6.0 재검증] 유효. claude.rs:32-54, 턴마다 :97 에서 동기로 다시 찾음, imagegen.rs:26 which.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
-        "id": "3",
-        "title": "[M0] [고장] 앱 종료 시 claude 프로세스 정리",
-        "description": "창을 닫아도 claude.exe 와 자식이 계속 돌며 파일을 고치고 사용량을 쓴다.",
-        "details": "lib.rs:100 RunEvent::Exit 는 control::forget 만 한다. kill_on_drop(claude.rs:130)은 future drop 때만. Job Object(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)에 넣거나 최소한 ExitRequested 에서 runs 전부 taskkill /T. claude.rs:138 stdin 쓰기 실패 때 runs 항목 · system.md 가 남는 것도 정리. [0.6.0 재검증] 유효. lib.rs:100-104, claude.rs:130 · :137-139. 0.6.0 의 쉬는 틈 자동 설치(updater.ts:97)라는 종료 경로가 새로 생겼다 — 거기서도 claude 를 정리해야 한다.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
-        "id": "4",
-        "title": "[M0] [고장] 프롬프트 ↔ 내보내기 규칙 맞추기 (글머리 목록이 그림으로 굳음)",
-        "description": "rt.js 는 list-item 을 자식째 굽는데 prompt.ts 는 바탕만 굳는 쪽에 적어 둠. 그림자 설명도 낡음.",
-        "details": "prompt.ts:35,63 · skill/SKILL.md:103 를 README 처럼 「도형 / 바탕만 그림 / 자식째 그림」 세 갈래로 다시 쓴다. rt.js:340-345 needsDeep 와 일치: list-item, mask, backdrop-filter, writing-mode, background-clip:text. 바깥 그림자 하나는 도형 그림자로 나간다(rt.js:346-357). 안전망으로 deck.ts:62 themeCss 에 .slide ul,.slide ol{list-style:none;padding:0} + 글머리 span 클래스. [0.6.0 재검증] 유효. prompt.ts:35 · :69, skill/SKILL.md:138-139 같은 오류, 실제는 rt.js:416-421 needsDeep · :422-430 simpleShadow.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
-        "id": "5",
-        "title": "[M0] [고장] 멈춤이 안 듣는 구간 + 그림 공급자 시간 제한",
-        "description": "claude 를 띄우기 전 · 그림 만드는 중에는 멈춤이 무시된다. 그림 공급자 요청에 timeout 이 없다.",
-        "details": "store.ts:446-466 pid 생기기 전 claude_stop(claude.rs:171) 무효. store.ts:468/479 에서 status 를 done 으로 덮어씀. claudeRun 전 · 그림 사이마다 취소 확인, Rust 에 취소된 턴 목록. imagegen.rs:115,145 reqwest 에 120s timeout + Client 하나 공유, :191 CLI 공급자는 tokio::process + timeout 뒤 kill. [0.6.0 재검증] 유효. store.ts:542 · :564 · :574-579, claude.rs:171, imagegen.rs:115 · 145 · 191.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": []
-      },
-      {
-        "id": "6",
-        "title": "[M0] [고장] openProject 동시 호출 시 리스너 중복",
-        "description": "덱을 두 번 빨리 열거나 CLI open 과 겹치면 deck-fs · claude 리스너가 두 벌 붙어 답 글자가 두 번 찍힐 수 있다.",
-        "details": "store.ts:256-316 listen 등록이 여러 await 뒤. 리스너를 모듈에서 한 번만 등록(이미 id · running 으로 거름)하거나 세대 번호로 늦은 호출을 버린다. 코드로 본 경합 — 재현 먼저. [0.6.0 재검증] 유효 + 넓어짐. store.ts:324-390(listen :344 · :368 앞에 await 9회+), :336 poll. App.tsx:41-43 에서 startRemote 와 resumeAfterUpdate 가 같은 때 openProject 를 부를 수 있다.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": []
-      },
-      {
-        "id": "7",
-        "title": "[M0] [성능] git 명령 비동기화 + 덱별 잠금 + 호출 수 줄이기 + 전역 설정 격리",
-        "description": "vcs_* 가 동기 명령이라 Tauri 메인 스레드에서 돈다. commit 한 번에 git 최대 8회(회당 약 40ms) → 턴 끝마다 약 0.3s 멈춤.",
-        "details": "vcs.rs:48-149, project.rs:48/85/102/132, fsx.rs:30-85 를 #[tauri::command(async)] 또는 spawn_blocking 으로. AppState 에 덱 폴더별 Mutex(index.lock 충돌 방지) + CLI 동시 커밋 재시도. vcs_log 를 git log --decorate-refs=refs/tags 한 번으로, commit 은 status --porcelain 으로 3~4회로. GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=빈 파일, commit --no-verify, -c gc.auto=0. refreshVersions(store.ts:519)에 한도. 협업 기능의 선행 조건. [0.6.0 재검증] 일부 고쳐짐 — 프로세스 사이 판 잠금(vcs.rs:85-116)은 생겼다. 남음: vcs.rs:49 · 79 · 179 · 224 · 233 여전히 동기 pub fn(메인 스레드), commit_all :118-124 add -A, 커밋 한 번에 git 8회+, 전역 설정 격리 없음, store.ts:625-629 이력 한도 없음, project.rs · fsx.rs 동기. 더 급해짐: 잠금을 기다리며 thread::sleep 을 최대 60초(vcs.rs:96-116) — 담당 CLI 가 판을 남기는 동안 앱 창 전체가 멈춘다. 묵은 잠금 걷기 경합(vcs.rs:104-107)도 함께.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
         "id": "8",
         "title": "[M0] [성능] 스트리밍 답 반영 묶기 + 대화 · 쪽 목록 다시 그리기 줄이기",
         "description": "text_delta 조각마다 set({turns}) → 모든 턴과 쪽 목록(Rail)이 다시 그려진다.",
@@ -105,17 +28,6 @@
         "title": "[M0] [성능] 굽기(bake)마다 넣는 2.8MB 글꼴 줄이기",
         "description": "fontCss() 가 모든 @font-face 를 base64 data URL 로 바꿔 bake 마다 SVG 에 통째로 넣는다.",
         "details": "rt.js:228-237, 308-309. 복제본에 글자가 없으면(img · svg · 바탕만) 글꼴 서식 생략. 하위 트리 계산 fontFamily 에 나오는 가족만. 부모가 한 번 만들어 extract 메시지로 넘기기. 「숨은 iframe 이 답하지 않는다」 20s 시간 초과와의 관계도 확인. [0.6.0 재검증] 유효. rt.js:304-313 fontCss, :385.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
-        "id": "11",
-        "title": "[M1] [성능] 핫 리로드 범위 좁히기 + deck:// 캐시 헤더",
-        "description": "assets 파일 하나만 바뀌어도 모든 쪽 rev 를 올리고, 모든 응답이 no-store 라 iframe 마다 2MB 글꼴을 다시 받는다.",
-        "details": "store.ts:286-288 새 파일은 무시, 덮어쓴 자산은 그 파일을 쓰는 쪽만. store.ts:280,290 바뀐 쪽이 있을 때만 set. lib.rs:166-173: assets 는 no-cache + ETag(mtime·크기), <id>@<커밋> 은 immutable, __rt.js 는 판 번호 붙인 주소 + max-age, 바이너리에 charset 빼기. @rev 는 (rev,path) LRU 또는 git cat-file --batch 상주. 요청 처리는 spawn_blocking. WebView2 가 가로챈 응답을 캐시하는지 실측. 협업 0.6 의 선행 — 원격(Funnel 대역폭 제한)에서 iframe 마다 2MB 글꼴을 다시 받으면 쓸 수 없다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. lib.rs:168-175, store.ts:353-362.",
         "testStrategy": "",
         "status": "pending",
         "dependencies": [],
@@ -156,19 +68,6 @@
         "subtasks": []
       },
       {
-        "id": "15",
-        "title": "[M1] [성능] 썸네일을 PNG 캐시로 (동시 iframe 35~40개 줄이기)",
-        "description": "쪽 목록 썸네일 · 이어 보기 · @ 고르기가 모두 live iframe 이다.",
-        "details": "Workspace.tsx:322 rootMargin 100% → 25%, ResizeObserver · IntersectionObserver 하나로. 근본: rt.js snapshot PNG 를 .claudeppt/thumbs/ 에 내용 해시로, rev 가 바뀐 쪽만 offscreen 하나로 다시 굽기. 이어 보기(Workspace.tsx:660-696)는 보이는 범위 ±2 만 그리기 + FlowItem memo. 협업 0.6 의 선행 — 원격 쪽 목록은 PNG 만, iframe 은 무대 한 장. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. Workspace.tsx:337 · 711 rootMargin 100%.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [
-          "9"
-        ],
-        "priority": "high",
-        "subtasks": []
-      },
-      {
         "id": "16",
         "title": "[M4] [성능] pptxgenjs · jszip 지연 로딩 (811KB 단일 청크)",
         "description": "store · remote · flows · versions 가 정적 import 라 시작 청크에 들어간다.",
@@ -192,93 +91,14 @@
       },
       {
         "id": "18",
-        "title": "[M4] [업그레이드] JS 의존성: pptxgenjs 4.0.1 · npm audit · vite 설정",
-        "description": "pptxgenjs 4 로 세로쓰기를 편집 가능한 글로. image-size(high, DoS) 감사 해소. Vite 8 __dirname 경고.",
-        "details": "pptxgenjs 4.0.0: textDirection 추가 · exports 필드 · Vite/Worker 감지 수정. 이 코드가 기대는 곳: exportPptx.ts:253-288 groupSlides(add 하나=spTree 자식 하나), :183-186 표 여백 단위, rectRadius, softBreakBefore → 올린 뒤 check 돌리고 group: 경고 확인. rt.js:344 writingMode 조건 풀고 importPptx 에 bodyPr@vert. npm audit fix. vite.config.ts:10 __dirname → import.meta.dirname. @tauri-apps/cli 2.12.6. TypeScript 7 은 선택. [0.6.0 재검증] 유효. package.json:20, vite.config.ts:10.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": []
-      },
-      {
-        "id": "19",
-        "title": "[M1] [보안] deck:// CSP · .cppt 임시물 제외 · 명령 경로 검증",
-        "description": "슬라이드 스크립트가 같은 출처로 프로젝트 파일을 읽어 밖으로 보낼 수 있다. .cppt 에 붙여 넣은 화면 그림이 들어간다.",
-        "details": "deck:// HTML 응답에 CSP: default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'none'. tauri.conf.json csp:null → 메인 창 CSP. fsx.rs:9-14 root 는 프로젝트 id 로 AppState 에서 찾기, abs_* 는 대화 상자 경로만, claude_path 는 Rust 가 settings 에서. project.rs:102-128 pack 에서 .claudeppt/attach · versions · check · shots 빼고 압축된 확장자는 Stored, io::copy 로 흘려 쓰기. 협업 기능의 선행 조건. 협업 0.6 의 선행 — 남의 브라우저가 슬라이드 스크립트를 돌린다. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효 + 넓어짐. tauri.conf.json:27, lib.rs:168, fsx.rs:9-14, project.rs:112. pack 이 seats.json · presence.json(세션 id) · activity.jsonl · seats.lock · .git/claudeppt-commit.lock 까지 담는다 — 풀면 담당이 「맡음」으로 보이거나 판 남기기가 최대 60초 기다린다. pack 에서 이것들을 뺀다(seats.json 정의만은 남길지 고르게).",
-        "testStrategy": "",
+        "title": "[보안] 의존성 취약점 — image-size(high, DoS) 고치기",
+        "description": "npm audit 의 high 1건. pptxgenjs 가 쓰는 image-size 가 조작된 그림에서 끝없이 돈다. 협업으로 원격 팀원이 첨부 · 그림을 올리므로 호스트를 멈출 수 있다.",
+        "details": "npm audit fix 로 image-size 를 고친 판으로(pptxgenjs 3.12 가 받는 범위 안이면 그대로, 아니면 overrides). 내보내기 · 가져오기가 그대로 되는지 확인. pptxgenjs 4 올리기는 이 작업에 넣지 않는다(기능). cargo audit 이 깔려 있지 않으면 Rust 쪽은 cargo tree 로 알려진 취약 크레이트만 훑는다.",
+        "testStrategy": "npm audit 에 high 0 · npm run build · 개발 실행에서 그림이 든 덱 PPTX 내보내기 1회",
         "status": "pending",
         "dependencies": [],
         "priority": "high",
         "subtasks": []
-      },
-      {
-        "id": "20",
-        "title": "[M4] [기능] 턴 끝 자동 점검 (넘침 · 그림으로 굳은 글)",
-        "description": "앱 안 Claude 는 그린 결과를 못 본다. 턴이 끝나면 고친 쪽을 inspect 해 문제가 있으면 「고치기」 칩.",
-        "details": "remote.ts:163-196 inspect 추출 재사용. 칩 → 이어 온 세션으로 한 번에 고치는 턴. 장기(L): --mcp-config 로 claudeppt.exe mcp 의 shot · inspect 를 도구로 줘 턴 안에서 스스로 확인. [0.6.0 재검증] 유효. remote.ts:249 inspect 만.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [
-          "4"
-        ],
-        "priority": "medium",
-        "subtasks": []
-      },
-      {
-        "id": "21",
-        "title": "[M4] [기능] 사용량 표시 (컨텍스트 · 캐시 · 턴 수 · 시간)",
-        "description": "지금은 total_cost_usd 만 남기고 마우스를 올려야 보인다.",
-        "details": "store.ts:313, Talk.tsx:189. result 사건의 usage(cache_read · cache_creation · input · output), num_turns, duration_ms 저장 → 「컨텍스트 82k · 캐시 94% · 6회 · 41s」. 컨텍스트가 크면 「새 대화」 권유. --max-turns(예 60) + error_max_turns 때 「이어서」, stdout 10분 무응답 시 kill, claude.rs:157 lines() 대신 read_until(깨진 UTF-8 에서 멈춤 방지). 글꼴 찾기는 sonnet · low 고정(fonts.ts:148), system.md 를 턴별 파일로(claude.rs:101,163). [0.6.0 재검증] 유효. store.ts:384-386, Talk.tsx:191 · 213, claude.rs:157 · 101 · 163.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": []
-      },
-      {
-        "id": "22",
-        "title": "[M4] [기능] SmartArt 가져오기",
-        "description": "ppt/diagrams/drawingN.xml 에 배치가 끝난 dsp:sp 가 있어 p:sp 처럼 그릴 수 있다.",
-        "details": "importPptx.ts:761-763 자리. dsp:dataModelExt@relId → 쪽 rels → drawing. 이름 접두어 맞추고 frame 좌표만큼 옮겨 shapeHtml 재사용. 좌표 기준(frame 기준인지) 확인. 다음 후보: 프리셋 도형 수식 계산기(presetShapeDefinitions.xml, M) → 내보낼 때 addShape(prst), 차트(L), 넣어 둔 글꼴(L). [0.6.0 재검증] 유효. importPptx.ts:724.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": []
-      },
-      {
-        "id": "23",
-        "title": "[M4] [기능] 턴별 차이 보기",
-        "description": "지금 비교는 「고른 판 ↔ 지금」뿐. 판 마디에 「이 턴이 바꾼 것」(바로 앞 판 ↔ 그 판)을 더한다.",
-        "details": "versions.ts · VersionLens.tsx 재사용. 「지난 턴 뒤 바뀐 파일」(직접 편집 · 바깥 CLI · 되돌리기)을 git diff 로 뽑아 다음 턴 요청문에 넣는 것도 함께. [0.6.0 재검증] 유효. 담당 판도 범위에 넣는다.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": []
-      },
-      {
-        "id": "24",
-        "title": "[M0] [문서] README 를 코드에 맞추기",
-        "description": "EMF 는 이미 PNG 로 바꾸고 숫자 좌표 자유형 도형도 그리는데 README 는 못 한다고 적혀 있다.",
-        "details": "README 「PPTX 가져오기가 옮기는 것」. claude.rs:7 「설정 › Claude 에서 고친다」 낡은 주석도. 위 작업들이 끝날 때마다 해당 구획 갱신. [0.6.0 재검증] 유효. README.md:156, claude.rs:7.",
-        "testStrategy": "",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": []
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M0] Claude Code 최소 판 검사 · 기능 감지",
-        "priority": "medium",
-        "description": "앱이 쓰는 플래그(--safe-mode · --permission-prompts · --session-id · --settings · --setting-sources)가 없는 옛 판이면 첫 턴에서 이상하게 실패한다.",
-        "details": "claude_detect(claude.rs:57)에서 --version 과 함께 --help 를 한 번 읽어 필요한 플래그가 있는지 보고 결과를 기억. 없으면 설정 화면 · 첫 턴 전에 「claude update 필요」 알림. 2.1.299 에서 모두 확인됨. 설계: .taskmaster/docs/collab-architecture.md [0.6.0 재검증] 유효. claude.rs:56-65.",
-        "id": "25"
       },
       {
         "testStrategy": "",
@@ -291,50 +111,6 @@
         "details": "store.ts:611-622 saveSeats · vacate 가 최대 8초 묵은 화면 사본을 api.writeText → fsx.rs:36-40 std::fs::write(비원자적)로 쓴다. seats.rs 의 잠금(seats.lock)을 거치지 않아 CLI 의 join · adopt · doing · seen 변경을 덮어쓴다. 쓰는 중 CLI 가 읽으면 seats.rs read() 가 None → list() 빈 목록 → join()(seats.rs:235-238)이 1번 모든 권한을 만들어 save. 고침: 담당 쓰기를 Rust 명령으로 옮겨 seats.rs 잠금 + 임시 파일 바꿔 달기(seats.rs write 와 같은 방식)로, 화면은 바뀐 칸만 보내 잠금 안에서 최신 파일에 합친다. join 은 파일이 있는데 못 읽었으면 빈 목록으로 보지 말고 잠시 뒤 다시 읽기. 원본에 보낼 첫 PR 후보. [완료 2026-11-25] PR a7garden/claudeppt#3 으로 원본에 합쳐졌다(0.7.0, 커밋 2a5adaf). 관리자 요청 세 가지(임시 파일 + 이름 바꾸기, 같은 seats.lock, 없음/못 읽음 가르기)를 담았다.",
         "id": "26",
         "updatedAt": "2026-11-25T07:25:57.384Z"
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M0] [고장] 쉬는 틈 자동 업데이트가 일하는 중에 다시 켠다",
-        "priority": "high",
-        "description": "0.6.0 자동 설치가 담당 세션이 일하는 중인지 보지 않고, 바깥 세션 대기 기준(2분)이 앱 스스로 쓰는 기준(3~5분)보다 짧으며, 창을 떠나 있으면 쓰던 요청 글 · 스케치를 확인하지 않는다.",
-        "details": "updater.ts:112-121 quiet(): presence(busy · doing) 미확인, OUTSIDE_QUIET_MS 2분 < store.ts:238-240 5분 · seats.ts:31 3분, away 면 커서 검사 건너뜀 — Talk.tsx:327-328 요청칸 글은 useState 라 재시작 때 사라진다. CHANGELOG 의 「커서가 있으면 기다린다」와 어긋남. 고침: busy 한 담당이 있으면 미루기, 바깥 기준을 앱 기준과 맞추기, 보내지 않은 요청 글 · 스케치 · 핀 초안이 있으면 미루거나 저장 후 복원, 재시작 전에 claude 프로세스 정리(#3). 협업 중(M1~)에는 접속자가 있으면 미루기. 원본에 보낼 PR 후보.",
-        "id": "27"
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M0] [고장] 앱 판에 담당 파일이 이름 없이 섞인다",
-        "priority": "medium",
-        "description": "앱 턴 · 직접 편집 판이 「고치는 중」이라고 알린 쪽 파일만 빼고 add -A 로 담아, 담당이 고치던 theme.css · deck.json · assets · 알리지 않은 쪽이 앱 이름의 판에 들어간다.",
-        "details": "store.ts:262-266 heldFiles 가 presence.doing 의 쪽만 뺀다. 담당 commit 이 돌려준 left, 알리지 않은 쪽, theme.css · deck.json · assets 는 vcs.rs:119 add -A 로 앱 판에. 고침: 살아 있는 담당(busy)의 맡은 범위(seats::allows) 전체를 빼고, 앱 판은 앱이 바꾼 경로만(턴 동안 attribute 로 모은 경로) 담는다. #7 의 경로 단위 커밋과 같이.",
-        "id": "28"
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M0] [고장] 바깥 CLI 판 남기기가 바뀐 파일을 잠금 밖에서 센다",
-        "priority": "low",
-        "description": "cli.rs 가 바뀐 파일 목록을 판 잠금을 잡기 전에 계산한다. 그 사이 앱이 판을 남기면 목록이 낡고, 지운 파일이면 add 가 실패한다.",
-        "details": "cli.rs:732 changed() 를 잠금 밖에서. 고침: 잠금을 잡은 뒤 계산. 묵은 잠금 걷기 경합(vcs.rs:104-107, 2분 넘게 묵었을 때만)은 잠금 파일에 pid · 시각을 적고 걷기 전에 다시 확인.",
-        "id": "29"
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M0] [성능] activity.jsonl 이 끝없이 커지고 8초마다 통째로 읽힌다",
-        "priority": "low",
-        "description": "담당 기록은 덧붙이기만 하는데, 앱은 8초마다 파일 전체를 동기 명령으로 읽고 마지막 200줄만 쓴다.",
-        "details": "seats.rs:94-100 · seats.ts:45 · store.ts:336. 고침: 일정 크기(예 1MB) 넘으면 앞을 잘라 activity.1.jsonl 로 돌리기, 앱은 끝에서부터 읽기(Rust 명령, 비동기). 원격(M1)에서는 8초 폴링 대신 사건.",
-        "id": "30"
       }
     ],
     "metadata": {
@@ -345,17 +121,18 @@
       "tags": [
         "master"
       ],
-      "updated": "2026-11-25T07:26:16.109Z"
+      "updated": "2026-11-25T07:42:31.344Z",
+      "description": "최적화 · 심각한 보안 — collab 다음에 한다. 원본 0.7.0 에서 코드 위치를 다시 확인하고 시작"
     }
   },
   "collab": {
     "tasks": [
       {
         "id": 1,
-        "title": "[M1] 전송 층 분리 — Tauri / 원격(HTTP · WebSocket)",
-        "description": "화면이 Tauri invoke · listen 에 직접 묶인 곳을 한 층으로 모아, 같은 화면이 브라우저에서 호스트로 붙을 수 있게 한다.",
-        "details": "api.ts 의 invoke 40개를 transport.call(name,args) 로. api.ts 밖 직접 invoke 3곳, listen 4개 파일(store.ts · remote.ts · fonts.ts · Settings.tsx)을 transport.on 으로. deckUrl(api.ts:62)을 원격이면 http://<호스트>:<포트>/deck/... 로. Tauri 전용(대화 상자 · PowerPoint · 내보내기 확인 · 창 단추)은 원격에서 숨김. 선행: master #8(스트림 묶기).",
-        "testStrategy": "",
+        "title": "[C0] feat/team-sessions 를 원본 0.7.0 위 collab 줄기로 옮기기",
+        "description": "담당 제거 · 팀원 세션(장표 세션 규칙) · 보낸 사람 표시 · 세션 목록 · 새 대화 · 보낼 곳을 0.7.0(요청칸 범위 줄 · 파일 첨부)과 합친다.",
+        "details": "fork 브랜치 collab 을 upstream/main(0.7.0)에서 따고 feat/team-sessions 의 커밋 3개(2e8a488 · 043d420 · b998e92)를 옮긴다. 0.7.0 의 Talk.tsx(범위 줄 · 첨부) · store.ts · app.css · i18n.ts 와 겹치는 곳을 손으로 맞춘다 — 0.7.0 의 범위 줄 위치에 「보낼 곳」을 함께 두는 등 원본 화면 모양을 따른다. 0.7.0 이 담당을 다시 건드렸으면 그것도 걷어낸다. 화면 문구는 원본 규칙대로: 한영 함께, 긴 대시(—) 없이, 안내문은 「~습니다」. 이후 collab 작업은 모두 collab 브랜치에 쌓는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "npx tsc --noEmit · cargo check · 개발 실행에서 가짜 claudeRun 으로 두 팀원 장표 세션 시나리오(새 대화 · 세션 목록 · 보낼 곳 · 다른 세션으로 이어 보냄) 재현 + 스크린샷 확인 · 범위 줄 · 첨부가 그대로 동작",
         "status": "pending",
         "dependencies": [],
         "priority": "high",
@@ -363,223 +140,215 @@
       },
       {
         "id": 2,
-        "title": "[M1] 협업 서버 — 호스트 PC 의 LAN HTTP + WebSocket",
-        "description": "호스트 앱 안에 서버를 띄워 앱 화면(dist) · 슬라이드 · 원격 API · 실시간 사건을 내준다.",
-        "details": "Rust(axum 또는 tiny_http + tungstenite). 슬라이드는 lib.rs serve() 그대로 재사용(경로 검사 fsx::inside 포함). 원격 API 는 허용 목록만 — abs_* · root 를 받는 fs_* · claude_path · settings 는 절대 내주지 않는다. 사건: deck-fs · 턴 스트림 · 접속. 듣는 곳: 127.0.0.1(바깥 길 터널이 붙는 곳) + 바깥 길이 없을 때만 LAN 인터페이스. IP · 네트워크 위치로 믿는 길은 두지 않는다 — 모든 요청(슬라이드 · 글꼴 포함)은 링크 토큰이나 기기 쿠키가 있어야 한다. Windows 방화벽은 「개인 네트워크」만 열기 안내. 선행: master #7(git 비동기 · 덱별 잠금), #19(deck:// CSP — 남의 브라우저가 슬라이드 HTML 을 그린다). 협업 서버는 「설정 › 협업」 스위치 뒤(기본 꺼짐) — 원본 사용자는 켜기 전까지 바뀌는 것이 없다.",
-        "testStrategy": "",
+        "title": "[C0] 판 남기기를 화면 스레드 밖으로 (창이 최대 60초 멈춤)",
+        "description": "vcs_* 가 동기 명령이라 판 잠금을 기다리는 동안 앱 창이 멈춘다. 여럿이 동시에 쓰면 더 자주 걸린다. master #7.",
+        "details": "vcs.rs 의 vcs_init · vcs_commit · vcs_log · vcs_tag · vcs_restore 와 project.rs · fsx.rs 의 동기 명령을 #[tauri::command(async)] 로. 덱별 잠금은 기존 .git/claudeppt-commit.lock 를 쓴다. 가능하면 commit 의 git 호출 수를 줄이고(status --porcelain), 전역 git 설정 격리(GIT_CONFIG_NOSYSTEM · 훅 끄기 · gc.auto=0). 원본에도 이로운 고장 수정이므로 upstream/main 에서 딴 fix 브랜치로 PR 을 보내고(규칙 참고), collab 에도 합친다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "cargo check · cargo test · 개발 실행에서 판 잠금을 잡아 둔 채(잠금 파일을 만들어 두고) 직접 편집 판을 남겨도 창이 멈추지 않는지(CDP 로 다른 조작이 바로 되는지)",
         "status": "pending",
-        "dependencies": [
-          1,
-          14
-        ],
+        "dependencies": [],
         "priority": "high",
         "subtasks": []
       },
       {
         "id": 3,
-        "title": "[M1] 브라우저로 같이 보기 + 누가 어디 보는지",
-        "description": "다른 PC 가 주소 하나로 같은 덱을 실시간으로 본다. 사람마다 지금 보는 쪽이 쪽 목록 · 무대에 보인다.",
-        "details": "쪽 목록 · 무대 · 이어 보기 · 판 목록(보기만). 접속 표시: 썸네일 옆 사람 동그라미(색 · 머리글자), 무대 머리에 「보는 중: A, C」, 사람을 누르면 그 사람 쪽으로 「따라가기」. 보는 쪽은 WebSocket 으로 쪽 id 만 주고받는다(번호는 순서가 바뀌면 달라짐). 글꼴: theme.css 앱 구획의 local() 별칭 글꼴은 원격 PC 에 없을 수 있다 → 호스트가 /fonts/<파일> 로 내주고 원격일 때 url() 로 바꿔 준다(사내 배포 범위 글꼴 라이선스 확인). 크롬 · 엣지 기준. 원본 0.5.0 의 담당 표시(쪽 목록 담당 색 · 고치는 중인 쪽 숨쉬는 테두리 · 판 목록 담당 번호 · 담당 창)를 원격 화면에도 그대로. 원본 store.ts 가 담당 파일을 8초마다 다시 읽는 것은 원격에선 사건으로.",
-        "testStrategy": "",
+        "title": "[C0] 장표 세션 복구 — 이어 받기가 실패해도 그 세션이 먹통이 되지 않게",
+        "description": "세션 기록이 없어지면(덱 폴더 이동 · .cppt 풀기) --resume 이 계속 실패한다. master #1 을 장표 세션 구조에 맞춰 고친다.",
+        "details": "claude stderr 의 'No conversation found' 를 잡으면 그 세션의 claude id 를 비우고, 그 세션의 최근 턴 요약(요청자 포함)을 앞에 붙여 한 번 새로 돌린다. 턴이 끝날 때 ~/.claude/projects/<작업 폴더>/<id>.jsonl 을 덱 .claudeppt/sessions/<id>.jsonl 로 복사하고, 덱을 열 때 없으면 되돌려 놓는다(되돌린 뒤 --resume 이 되는지 먼저 실험). 새 세션은 처음부터 --session-id 로 앱이 id 를 정한다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "가짜 세션 id 로 resume 실패를 만들어 자동 복구되는지(진짜 Claude 1~2턴), jsonl 복사 · 복원 확인",
         "status": "pending",
         "dependencies": [
-          2,
-          15
+          1
         ],
         "priority": "high",
         "subtasks": []
       },
       {
         "id": 4,
-        "title": "[M2] 사람 · 역할 · 초대 링크 (줌처럼 링크가 곧 열쇠)",
-        "description": "링크를 누르고 이름만 적으면 들어온다 — 같은 와이파이든 아니든 같은 링크, 추가 인증 없음. 공용 링크와 개인 링크 두 가지.",
-        "details": "링크 두 종류. 공용 링크: 여럿이 같이 쓰고, 들어올 때 이름 · 색을 직접 적는다(줌과 같음 — 이름은 스스로 밝힌 것). 기본 역할 검토자. 개인 링크: 한 사람용, 이름 · 역할(편집자 등)이 링크에 묶여 있어 「누가 명령했나」 기록이 확실하다 — 편집자는 개인 링크를 권장. 저장: .claudeppt/collab.json members[{id,name,color,role,link,devices[]}], links[{id,kind(공용|개인),role,tokenHash,expires,uses}]. 토큰은 128비트 이상 무작위 · 해시로만 저장. 첫 접속 때 기기 쿠키(HttpOnly · SameSite=Strict)로 바꿔 주고 주소창에서 토큰을 지운다. 편집장 관리: 만료(없음 · 하루 · 일주일, 편집 링크는 짧게 권장 — 호스트에서 Claude 를 돌릴 수 있다), 「한 번만 쓰기」, 링크 다시 만들기, 사람 내보내기(그 기기 쿠키 전부 무효). 역할: 편집장 = 호스트(덱 세션 · theme.css · 쪽 순서 · 판 되돌리기 · 릴리즈 · 내보내기 · 멤버 · 회의 잠금), 편집자 = 허락된 담당 세션 명령 + 그 쪽 직접 편집, 검토자 = 보기 + 의견(명령은 「제안」). .cppt 묶을 때 collab.json 빼기.",
-        "testStrategy": "",
+        "title": "[C0] claude 실행 파일 찾기 보강 · 앱을 꺼도 claude 가 남는 문제",
+        "description": "where claude 만 써서 ~/.local/bin 설치를 못 찾고, 창을 닫아도 claude 프로세스가 계속 돈다. master #2 · #3.",
+        "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "PATH 에 ~/.local/bin 없이 앱을 띄워 claude 를 찾는지, 턴 도중 창을 닫았을 때 claude.exe 가 남지 않는지(Get-Process)",
         "status": "pending",
-        "dependencies": [
-          2
-        ],
+        "dependencies": [],
         "priority": "high",
         "subtasks": []
       },
       {
         "id": 5,
-        "title": "[M2] 사람과 담당 잇기 — 누가 어느 담당에 명령하나",
-        "description": "담당 정의(쪽 · 권한 · 색)는 원본 0.5.0 에 이미 있다(seats.json · 담당 창). 여기서는 링크로 들어온 사람을 담당에 잇는다.",
-        "details": "collab.json 에 담당 번호 → 명령할 수 있는 사람 목록(seats.json 꼴은 건드리지 않음 — 원본 CLI · 담당 창과 호환). 담당 창(Seats.tsx)에 「명령할 수 있는 사람」 칸, 원격 화면에서도 담당 창 보기. 편집장(호스트)은 모든 담당. 권한 없는 사람의 요청은 「제안」으로 → 권한 있는 사람이 받아들이면 그 담당 대기열로. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C0] 작업 중 · 접속 중에는 자동 업데이트가 다시 켜지 않게",
+        "description": "0.6 의 쉬는 틈 자동 설치가 Claude 턴 · 바깥 세션 · 쓰던 요청 글을 제대로 보지 않는다. 호스트가 다시 켜지면 팀원 모두가 끊긴다. master #27.",
+        "details": "updater.ts quiet(): 도는 턴이 있거나, 쓰던 요청 글 · 첨부 · 핀 초안이 있거나, (C1 이후) 협업 접속자가 있으면 미룬다. 바깥 세션 대기 기준을 앱의 다른 기준과 맞춘다. 원본에 담당이 남아 있으면 원본용 fix PR 에서는 담당 presence 도 본다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "updater 의 quiet 판정을 조건별로 확인하는 작은 시험(가짜 시계) 또는 개발 실행에서 조건을 만들어 확인",
         "status": "pending",
         "dependencies": [
-          4
+          1
         ],
         "priority": "high",
         "subtasks": []
       },
       {
         "id": 6,
-        "title": "[M2] 공유 피드백 — 핀 · 표시를 의견 스레드로",
-        "description": "지금의 핀 · 펜 · 화살표 · 범위 표시를 작성자 · 받는 사람 · 상태(열림/해결) · 답글이 있는 의견으로 넓힌다.",
-        "details": "store.ts:34 Pin 에 author · status · replies 추가, .claudeppt/pins.json 을 서버가 한 곳에서 고치고 방송. 담당자에게 알림 칩. 「이 의견들을 그 쪽 담당 세션에 보내기」 — 보낸 사람과 의견 작성자를 함께 남긴다(예: 「A 가 보냄 · C 의견 #12」). 검토자는 「명령 제안」만, 담당자가 받아들이면 그 세션 대기열로. 해결된 의견은 접기. 의견에 판 번호를 남겨 어느 판을 보고 한 말인지. 원본 0.4.4 에서 바깥 세션이 핀을 읽고 지운다 — 같은 핀 파일에 작성자 · 상태 · 답글을 더하되 원본 CLI 가 읽는 꼴은 지킨다.",
-        "testStrategy": "",
+        "title": "[C1] 전송층 분리 — 같은 화면이 Tauri 와 브라우저 양쪽에서",
+        "description": "api.ts 의 invoke · listen · deckUrl 을 transport 한 층으로 모은다. 호스트 앱은 Tauri, 브라우저는 WebSocket/HTTP.",
+        "details": "api.ts 의 명령을 transport.call(name,args) 로, listen 쓰는 곳(store.ts · remote.ts · fonts.ts · Settings.tsx)을 transport.on 으로. 원격에서는 Tauri 전용(대화 상자 · 창 단추 · 내보내기 · 설정)을 숨긴다(capabilities 플래그). 호스트 동작은 그대로여야 한다. 함께: openProject 를 겹쳐 불러도 사건 리스너가 두 벌 붙지 않게 모듈에서 한 번만 등록(원격 접속이 늘면 글자가 두 번 찍힌다, 옛 master #6). 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "tsc · 호스트 개발 실행에서 기존 흐름(새 덱 · 직접 편집 · 턴 · 판) 그대로 · transport 단위 시험",
         "status": "pending",
         "dependencies": [
-          4,
-          5,
-          16
+          1
         ],
         "priority": "high",
         "subtasks": []
       },
       {
         "id": 7,
-        "title": "[M3] 앱이 돌리는 담당 세션 + 요청자 기록 + 대기열",
-        "description": "지금 담당은 같은 PC 의 바깥 Claude Code 세션만 맡는다. 앱이 담당마다 세션을 직접 돌리고, 권한 있는 사람(로컬 · 원격)이 그 세션에 명령한다. 누가 명령하든 같은 세션에 이어져 맥락이 남고 턴마다 요청자가 기록된다.",
-        "details": "세션 id: 담당을 만들 때 UUID → seats.json 그 담당의 appSession(원본 꼴에 칸 하나 더함 — 원본 CLI 가 모르는 칸은 무시하는지 확인). 첫 턴 --session-id, 이후 --resume, -n 「<담당 이름> 세션」. presence.json 에 session \"app:<uuid>\" 로 적고 턴마다 seen · doing 갱신 → 원본 담당 창 · 쪽 목록 표시가 그대로 동작. 바깥 세션이 신선하게 맡은 담당엔 턴을 돌리지 않고 「바깥 세션이 맡음」, 편집장 「비우기」 후 넘김. 요청문 첫 줄 [요청자: B · C 의견 #12 반영], activity.jsonl 에도. 한 담당 한 턴(대기열), 다른 담당끼리 동시, 호스트 동시 상한 기본 3. 시스템 프롬프트에 seats::rules 글(담당마다 고정 — 바뀌는 값은 턴 요청문). 모델: 담당 sonnet · medium, 모든 권한 담당 opus. 인증: 요청자 인증을 턴 env 로(CLAUDE_CONFIG_DIR 은 그대로). 세션 기록 jsonl 보존(master 세션 복구와 같은 장치). 담당이 없을 때 기존 앱 안 대화는 원본 그대로, 담당이 있으면 「모든 권한 담당」 세션으로. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C1] 협업 서버 — 「설정 › 협업」(기본 꺼짐) 뒤 axum HTTP + WebSocket",
+        "description": "호스트 앱 안에 서버를 띄워 앱 화면 · 슬라이드 · 원격 API · 사건을 내준다. 켜기 전에는 아무것도 바뀌지 않는다.",
+        "details": "axum 0.8(ws) + tower-http. 화면은 Tauri asset_resolver(개발 실행은 Vite 1424 프록시), 슬라이드는 lib.rs serve() 재사용(경로 검사 포함), 사건: 파일 변경 · 턴 글자(30ms 묶음) · 세션 · 판 · 접속 · 의견, 일련번호 + 재접속 다시 받기. 원격 API 는 허용 목록뿐. 모든 요청에 토큰/쿠키(C2 전에는 호스트가 만든 임시 토큰). 바인드: 켜면 LAN, 끄면 닫음. 먼저 기술 검증: asset_resolver 로 화면 내주기, WebSocket 왕복. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "cargo test(라우팅 · 허용 목록 · 토큰 없는 요청 401) · 개발 실행에서 켜고 브라우저(CDP 새 탭)로 /app 열기",
         "status": "pending",
         "dependencies": [
-          5,
-          16
+          6
         ],
-        "priority": "medium",
+        "priority": "high",
         "subtasks": []
       },
       {
         "id": 8,
-        "title": "[M3] 앱 담당 세션은 고치기 전에 막기 (원본은 판에서 걸러냄)",
-        "description": "원본은 바깥 세션의 Edit 를 가로챌 수 없어 판을 남길 때 걸러낸다. 앱이 띄우는 담당 세션은 --settings 권한 규칙으로 맡지 않은 파일 Edit · Write 를 미리 막을 수 있다.",
-        "details": "seats::allows 로 그 담당이 넣을 수 있는 파일 목록을 계산 → --settings 의 permissions(allow: 그 파일들 · assets/, deny: 나머지) 로 넘김. --safe-mode --setting-sources \"\" 와 함께 듣는지 실험 #14-2. 판에서 걸러내는 원본 장치는 그대로 두 번째 그물. 사람 축: 서버가 대기열에 넣을 때 그 사람이 그 담당에 명령 권한이 있는지 검사, 직접 편집(rt.js)도 같은 규칙. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C1] 브라우저로 같이 보기 + 누가 어디 보는지",
+        "description": "팀원 브라우저가 같은 덱을 실시간으로 본다. 쪽 목록 · 무대 · 이어 보기 · 대화(세션 목록 포함) · 판 목록. 누가 어느 쪽을 보는지 표시.",
+        "details": "원격 화면은 같은 React 를 transport=remote 로. 파일 변경 사건으로 바뀐 쪽만 다시 그림. 접속 표시: 썸네일 옆 사람 머리글자, 무대 머리 「보는 중: …」, 사람을 누르면 따라가기. 글꼴: 호스트에 깔린 local() 글꼴은 /fonts 로 내줌. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "개발 실행 + 브라우저 탭 둘(CDP)로: 호스트에서 고친 쪽이 브라우저에 다시 그려지는지, 보는 쪽 표시가 오가는지, 스크린샷",
         "status": "pending",
         "dependencies": [
           7
         ],
-        "priority": "medium",
+        "priority": "high",
         "subtasks": []
       },
       {
         "id": 9,
-        "title": "[M3] 판 작성자를 「요청한 사람」으로 (경로 단위 판은 원본에 있음)",
-        "description": "원본 0.5.0 이 담당별 경로 단위 판 · 동시 판 차례 세우기를 이미 한다. 남은 것은 작성자를 그 턴을 시킨 사람으로 남기는 것.",
-        "details": "앱 담당 세션의 판: git 작성자 = 요청자(-c user.name), 꼬리표 Seat: <번호> · Requested-by: <사람> · Via: <의견 id>. 판 목록에 담당 번호(원본) + 요청자. 되돌리기 · 릴리즈 권한은 원본 manage 플래그 그대로. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C1] 원격 대역폭 · 캐시 · 슬라이드 보안",
+        "description": "Funnel 처럼 느린 길에서도 첫 화면이 10초 안에. 남의 브라우저가 슬라이드 스크립트를 돌리므로 CSP. master #11 · #15 · #19.",
+        "details": "deck:// · 서버 응답: 자산 ETag + no-cache, 판 고정 주소 immutable, HTML · CSS · JS 압축. 원격 쪽 목록은 썸네일 PNG(rt.js snapshot, 내용 해시 캐시). Pretendard 를 unicode-range 조각으로. 슬라이드 HTML 에 CSP(connect-src 'self' 등). 원격 API 에서 abs_* · root 를 받는 fs_* 는 절대 노출 안 함. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "응답 머리글 확인(curl) · 대역폭 제한(Chrome DevTools 네트워크 느리게)으로 첫 화면 시간 · CSP 로 슬라이드 fetch 외부 차단 확인",
         "status": "pending",
         "dependencies": [
-          7
+          8
         ],
         "priority": "medium",
         "subtasks": []
       },
       {
         "id": 10,
-        "title": "[M3] 공유 자원 — 권한 없는 사람의 테마 · 쪽 구성 요청은 「제안」으로",
-        "description": "원본 담당 권한(theme · order · manage)이 theme.css · deck.json · 되돌리기를 이미 가른다. 남은 것은 원격 사람 · 앱 세션 쪽 처리.",
-        "details": "앱 담당 세션이 order 권한이 없으면 협업 모드 프롬프트에서 deck.json 을 고치지 않게(쪽 파일만 만들고 앱이 그 담당 끝에 끼움 — 원본 adopt 와 같은 결과). 권한 없는 사람의 테마 · 순서 요청은 「제안」 → theme · order 권한 담당에게. 담당 넘는 요청(「@1-8 톤 맞춰」)은 모든 권한 담당으로. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C2] 초대 링크 · 이름 한 번 · 참가자 관리",
+        "description": "줌처럼 링크 하나로 들어온다. 처음 들어올 때 이름을 한 번 적고 브라우저가 기억한다. 인증 없음. 호스트가 참가자를 본다.",
+        "details": "링크 https://<주소>/j/<토큰>: 공용(여럿, 이름 직접) · 개인(이름 고정). 첫 접속 때 이름 → 기기 쿠키(HttpOnly · SameSite=Strict) + 주소창에서 토큰 지움. 호스트 「협업」 창: 링크 만들기 · 복사 · 만료 · 다시 만들기, 참가자 목록, 내보내기, 대기실(선택), 회의 잠금. 토큰은 해시로만 .claudeppt/collab.json 에(.cppt 에서 빼기). 원격 팀원의 이름 = 요청 · 편집 · 판의 보낸 사람. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "브라우저 탭으로 링크 열기 → 이름 → 다시 열면 묻지 않음 · 내보내기 후 막힘 · 토큰 없는 요청 401",
         "status": "pending",
         "dependencies": [
           7
         ],
-        "priority": "medium",
+        "priority": "high",
         "subtasks": []
       },
       {
         "id": 11,
-        "title": "[M2] 줌처럼 — 링크 하나로 어디서나 (바깥 길 자동)",
-        "description": "협업을 켜면 앱이 바깥 길을 스스로 열고, 같은 와이파이든 밖이든 같은 링크로 들어온다. 손님은 아무것도 깔지 않는다.",
-        "details": "줌은 줌 서버가 가운데 있어 링크가 어디서나 열린다. 이 앱은 호스트 PC 가 서버라서 바깥 길(터널)이 그 몫을 한다. 바깥 길 고르기(앱이 깔린 것을 감지해 띄우고 주소를 읽는다): (1) Cloudflare 이름 붙인 터널 — 내 도메인 고정 주소, 대역폭 · 동시 요청 여유, Cloudflare 계정 + 도메인 필요 → 팀이 계속 쓸 때 권장. (2) Tailscale Funnel — https://<pc>.<tailnet>.ts.net 고정, 도메인 불필요, 443/8443/10000 포트 · v1.38.3+, 대역폭 제한(비공개) → 처음 시작 · 소규모. (3) Cloudflare quick tunnel — 계정 없이 바로, 동시 요청 200 제한 · SSE 미지원 · 켤 때마다 주소 바뀜 · 시험용 → 시연만. (4) 없음 — LAN 주소, 사무실 안에서만 열린다고 알림. 앱이 터널 출력에서 주소를 읽어 링크(https://<주소>/j/<토큰>)에 넣는다(imagegen 의 도구 감지처럼). 바깥 길이 있으면 사무실 안 사람도 같은 링크로 들어온다.\n줌의 장치들: 대기실(선택 — 켜면 편집장이 한 사람씩 들여보냄), 회의 잠금(새 입장 막기), 내보내기, 참가자 목록.\n「같은 와이파이면 링크 없이 허용」은 넣지 않는다 — IP 로 믿는 길이 없으니 터널 요청이 127.0.0.1 로 보여 인터넷 전체가 들어오는 함정도 생기지 않는다.\n줌과 다른 점: 호스트 PC 가 꺼지거나 잠들면 모두 끊긴다 → 협업 중 잠자기 막기, 손님 화면에 「호스트 오프라인 · 다시 연결 중」, 재접속 · 놓친 사건 다시 받기(판 번호 기준).\n공개 주소가 열려 있는 동안: 토큰 · 쿠키 없는 요청은 슬라이드 · 글꼴까지 401, 토큰 실패 횟수 제한, 제목 줄 「바깥 열림 · 2명」, 접속 · 명령 감사 기록, 자동 닫기 시간(선택).\n장기 대안: 자체 중계 서버(줌처럼 고정 주소 · 호스트 쪽 도구 없음) — 서버 운영비 · 관리가 들어 보류. 전송은 WebSocket(SSE 쓰지 않음), 막히면 긴 폴링. 설계: .taskmaster/docs/collab-architecture.md",
-        "testStrategy": "",
+        "title": "[C2] 바깥 길 자동 — 사무실 밖에서도 같은 링크",
+        "description": "협업을 켜면 Tailscale Funnel 이나 Cloudflare quick tunnel 을 감지해 띄우고 그 주소를 링크에 넣는다. 둘 다 없으면 LAN 주소(사무실 안에서만)라고 알린다.",
+        "details": "imagegen 의 도구 감지처럼: tailscale(funnel 443) → cloudflared(tunnel --url) 순. 터널은 127.0.0.1 전용 포트에 붙이고, IP 로 믿는 길은 없다. 호스트 앱 제목 줄에 「바깥 열림 · n명」. 먼저 기술 검증: WebSocket 이 각 터널을 지나는지. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "깔린 도구가 있으면 실제로 열어 바깥 주소로 /app 확인, 없으면 감지 · 안내 문구만 확인",
         "status": "pending",
         "dependencies": [
-          2,
-          4
+          10
         ],
         "priority": "medium",
         "subtasks": []
       },
       {
         "id": 12,
-        "title": "[보류] 참여자 PC 에서 Claude 실행 (참여 모드)",
-        "description": "각자 ClaudePPT 를 깔고 자기 로그인으로 자기 PC 에서 Claude 를 돌리며, 파일은 호스트와 맞춘다.",
-        "details": "보류(2026-11-25): 세션을 담당에 고정하면 세션 기록이 호스트 ~/.claude 에 쌓인다. 다른 PC 에서 Claude 를 돌리면 그 세션을 이어 갈 수 없어 이 설계와 맞지 않는다. 호스트 부하나 인증 문제가 실제로 생길 때 다시 본다.",
-        "testStrategy": "",
-        "status": "deferred",
+        "title": "[C3] 브라우저에서 Claude 에게 요청 — 호스트 계정으로",
+        "description": "팀원이 브라우저 대화칸에서 보낸다. 장표 세션 규칙(routeOf)대로 이어지고, 보낸 사람 = 링크 이름. Claude 는 호스트 계정.",
+        "details": "원격 send 의도 → 호스트가 routeOf · 세션 · 판 작성자를 그대로 처리. 턴 글자 · 상태 · 세션 목록이 모든 화면에 사건으로. 첨부(0.7.0)는 원격에서 올린 파일을 호스트 .claudeppt/attach 로. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "가짜 claudeRun 으로 브라우저 탭 둘에서 번갈아 요청 → 세션 · 보낸 사람 · 판 작성자 확인, 진짜 Claude 1턴",
+        "status": "pending",
         "dependencies": [
-          9,
+          8,
           10
         ],
-        "priority": "low",
+        "priority": "high",
         "subtasks": []
       },
       {
         "id": 13,
-        "title": "[M3] 화면 표시 — 보는 사람 · 대기열 · 턴 요청자 (담당 표시는 원본에 있음)",
-        "description": "보는 사람 · 세션 상태 · 대기열 · 턴 요청자 · 판 작성자를 한 화면에서 읽히게 한다.",
-        "details": "원본에 있는 것: 쪽 목록 담당 색 · 고치는 중 테두리 · 판 목록 담당 번호 · 담당 창(맡음 · 일하는 중 · 비어 있음 · 지금 하는 일 · 기록). 더할 것: 썸네일 옆 보는 사람 동그라미, 대화칸이 지금 쪽 담당의 앱 세션을 보여 줌(머리에 담당 이름 · 상태 · 대기열), 턴마다 요청자 머리글자 · 「C 의견 #12」 꼬리, 요청칸 「나(A) → 2번 담당」 · 권한 없으면 「제안」, 판 목록에 요청자. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "testStrategy": "",
+        "title": "[C3] 세션마다 대기열 · 다른 세션끼리 동시 실행",
+        "description": "지금은 앱 전체가 한 번에 한 턴. 같은 세션은 차례로, 다른 세션은 동시에 돌게 한다.",
+        "details": "store running(하나) → 세션별 실행 상태 Map, 사건 필터를 턴 id 로. 같은 세션 요청은 대기열(화면에 「대기 1 · 민수」). 호스트 동시 상한(기본 3). 판 남기기는 판 잠금으로 한 줄(C0 #2). 동시에 도는 턴끼리 판이 섞이지 않게: 턴이 고친 파일(tools)만 그 턴 판에 담는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "가짜 claudeRun(지연)으로 두 세션 동시 · 같은 세션 대기 확인, 판에 각자 파일만 들어가는지",
         "status": "pending",
         "dependencies": [
-          3,
-          7
+          12,
+          2
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "[C3] 브라우저 팀원 직접 편집",
+        "description": "브라우저에서도 글자 고치기 · 끌어 옮기기 · 방향키 · 지우기. 호스트가 한 줄로 받아 원본에 쓰고, 편집한 사람이 판에 남는다.",
+        "details": "rt.js 직접 편집 의도(applyDirect)를 원격에서 호스트로. 같은 쪽을 누가 고치는 중이면 「○○ 이 고치는 중」 표시, Claude 가 그 쪽 턴을 도는 동안은 막음(지금 동작), 같은 요소는 나중 것이 이김. 되돌리기(Ctrl+Z)는 그 사람 것만. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "브라우저 탭에서 글자 고치기 → 호스트 화면 · 파일 · 판 작성자 확인, 두 탭 동시 편집 표시",
+        "status": "pending",
+        "dependencies": [
+          12
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "[C4] 공유 의견 — 핀 · 표시를 작성자 있는 의견으로",
+        "description": "팀원끼리 피드백. 핀 · 표시에 작성자 · 해결 상태, 모두에게 보임, 「이 장표 세션에 보내기」.",
+        "details": "pins.json 을 호스트가 한 곳에서 고치고 사건으로. 의견 목록(열림 · 해결), 받은 의견 알림. 「세션에 보내기」는 지금 핀이 요청칸 위에 쌓여 함께 가는 흐름 재사용 + 의견 작성자를 요청에 적음(「C 의견 반영」). 바깥 CLI 가 읽는 핀 꼴은 지킨다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "두 탭에서 의견 남기기 · 해결 · 세션에 보내기 → 턴에 의견 작성자",
+        "status": "pending",
+        "dependencies": [
+          12
         ],
         "priority": "medium",
         "subtasks": []
       },
       {
-        "testStrategy": "",
+        "id": 16,
+        "title": "[C5] 원본 기여 정리",
+        "description": "collab 줄기를 원본 규칙에 맞춰 나눈 PR 들로 준비한다. 이슈 #1 관리자 답(담당을 바꿀지 / 따로 둘지)에 따른다.",
+        "details": "원본 규칙: 「설정 › 협업」 스위치 뒤(켜기 전 변화 없음) · PR 하나에 한 가지 · 판 번호 안 올림 · CHANGELOG 줄 · 한영 문구 · 긴 대시 없음 · 「~습니다」. 담당 처리는 관리자 답 전에는 하지 않는다. 협업 기능 PR 은 사용자 확인 뒤에만 보낸다(규칙 참고). 브랜치만 준비해 두고 기록에 남긴다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "각 PR 브랜치가 upstream/main 위에서 tsc · cargo check 통과",
         "status": "pending",
-        "subtasks": [],
-        "dependencies": [],
-        "title": "[M1] 기술 검증 실험 6가지 (먼저)",
-        "priority": "high",
-        "description": "설계가 기대는 가정을 코드 전에 확인한다. 하나라도 틀리면 설계 문서 해당 절을 고친다.",
-        "details": "1) WebSocket 이 Tailscale Funnel · Cloudflare quick tunnel 을 통과하는가 + 실제 덱 첫 화면이 Funnel 에서 몇 초인가. 2) --safe-mode --setting-sources \"\" 와 함께 --settings 의 permissions 로 Edit · Write 제한이 듣는가. 3) 인증이 다른 두 턴(setup-token 토큰 A · B)이 --resume 으로 같은 세션에 이어지는가, 토큰을 넘기는 환경 변수 이름. 4) --session-id 로 시작한 세션 jsonl 을 다른 작업 폴더 이름 아래로 복사했을 때 --resume 이 되는가. 5) Tauri asset_resolver() 로 내장 화면을 axum 으로 내줄 때 개발 · 배포 실행 모두 되는가. 6) 앱 담당 세션을 presence.json 에 session \"app:<uuid>\" 로 적고 seats.json 에 appSession 칸을 더했을 때 원본 CLI(join · seats · commit) · 담당 창이 깨지지 않는가. 설계: .taskmaster/docs/collab-architecture.md",
-        "id": 14
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
         "dependencies": [
-          2
+          15
         ],
-        "title": "[M1] 원격 대역폭 줄이기 — 글꼴 나눠 받기 · 압축 · 지금 쪽 먼저",
-        "priority": "high",
-        "description": "Funnel 대역폭 제한(비공개, 보고 약 1Mbps)에서도 첫 화면이 10초 안에 뜨게 한다.",
-        "details": "Pretendard 를 unicode-range 조각(dynamic subset)으로 바꿔 쓰는 글자 조각만 받기(deck.ts:16 · themeCss 의 woff2 통째 대신). HTML · CSS · JS 는 tower-http 로 gzip/brotli, 그림은 그대로. 원격은 지금 쪽부터 그리고 나머지는 뒤에서. master #11(캐시) · #15(썸네일 PNG)와 함께 해야 효과가 난다. 측정: 실험 #14 의 Funnel 첫 화면 시간. 설계: .taskmaster/docs/collab-architecture.md",
-        "id": 15
+        "priority": "medium",
+        "subtasks": []
       },
       {
-        "testStrategy": "",
+        "id": 17,
+        "title": "[마무리] 1차 시험 결과 · 내일 사용자 시험 안내서",
+        "description": "자동 작업에서 한 1차 시험 결과를 모으고, 사용자가 내일 직접 해 볼 시험을 단계별로 적는다.",
+        "details": "각 작업의 시험 기록(.taskmaster/docs/autorun-log.md)을 모아 .taskmaster/docs/test-guide.md 를 쓴다: (1) 무엇을 만들었고 어느 브랜치에 있는지, (2) 내가 이미 확인한 것(자동 시험 · 개발 실행 · 스크린샷 경로)과 확인하지 못한 것, (3) 사용자가 해 볼 시험 — 내 PC 한 대에서 브라우저 탭으로, 다른 PC 에서 같은 와이파이로, 바깥(휴대폰 LTE 등)에서 — 각 단계의 기대 결과, (4) 알려진 한계 · 남은 일. 앱을 띄우는 방법(개발 실행 또는 빌드)도 적는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "testStrategy": "안내서의 단계를 내가 따라 할 수 있는 만큼 따라 해 보고 결과를 적는다",
         "status": "pending",
-        "subtasks": [],
-        "dependencies": [
-          2
-        ],
-        "title": "[M2] 의도 API — 원본 바깥 CLI 명령 처리기를 원격에도",
-        "priority": "high",
-        "description": "손님 · 호스트 화면 모두 파일을 직접 쓰지 않고 「의도」를 보낸다. 지금 쓰기 로직이 화면(TS)에 흩어져 있어(판 남기기 10곳 · 쓰기 15개 파일) 여럿이 쓰면 덮어쓴다.",
-        "details": "원본에 이미 담당 권한을 검사하며 처리하는 명령이 있다(cli.rs · control.rs · remote.ts: 판 남기기 · 쪽 더하기/빼기/옮기기 · 하는 일 · 핀 읽기/지우기 · 그림 채우기 · 기다리기). 원격 화면의 의도를 이 처리기로 보내고, 사람 → 담당 권한 검사를 앞에 둔다. 더할 의도: turn.send(seat,text,refs) · direct.edit(slide,patch) · pin.add/update/resolve(작성자 · 상태) · member.*. 처리 자리는 원본처럼 호스트 화면 TS(덱별 직렬 큐) — M3 에서 Rust 코어로. 설계: .taskmaster/docs/collab-architecture.md (원본 0.6.0 기준)",
-        "id": 16
-      },
-      {
-        "testStrategy": "",
-        "status": "pending",
-        "subtasks": [],
         "dependencies": [
           16
         ],
-        "title": "[M3] 처리기를 Rust 코어로 — 파일 · git · 세션 · 의견",
-        "priority": "medium",
-        "description": "그리기가 필요 없는 의도는 Rust 코어가 덱별 잠금 안에서 직접 처리한다. 호스트 화면은 그리기 일꾼(내보내기 · 썸네일 · inspect · check)만.",
-        "details": "원본 seats.rs 가 담당 판정 · presence 를 이미 Rust 에서 한다. 옮길 것: deck.json 순서 · 쪽 더하기/빼기, 경로 단위 커밋, 담당 세션 관리자(대기열 · 동시 상한 · 인증 env · 세션 기록 보존), pins. 사건 버스에 seq + 짧은 고리 버퍼(재접속 때 놓친 사건 다시 보내기, 넘치면 「전체 다시」). watch.rs:23 감시 오류도 「전체 다시」로. 의도 API(#16) 꼴은 그대로라 손님 화면은 바뀌지 않는다. store.ts 를 slice(project · talk · direct · versions · ui)로 나누며 진행. 설계: .taskmaster/docs/collab-architecture.md",
-        "id": 17
+        "priority": "high",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2026-11-25T02:30:34.425Z",
-      "updated": "2026-11-25T05:25:38.894Z",
-      "description": "여러 PC 협업 — 원본 0.6.0 「담당」 위에: 앱 담당 세션 · 요청자 기록 · 줌처럼 링크 · 쓰기는 코어 한 곳 (M1~M3)"
+      "updated": "2026-11-25T07:42:31.344Z",
+      "description": "팀 협업 — 초대 링크 · 호스트 계정 · 장표 세션 · 보낸 사람 · 브라우저 직접 편집 · 의견 (C0~C5, 먼저)"
     }
   }
 }
