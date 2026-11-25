@@ -451,8 +451,6 @@ function Composer() {
 					))}
 				</div>
 			)}
-			{/* 보낼 곳 — 세션이 생긴 뒤부터. 보고 있는 대화와 다른 세션으로 가면 진하게 */}
-			{sessions.length > 0 && <div className={"route" + (route.key && route.key !== talkKey ? " away" : "")} title={t("sessionHint")}>{routeText}</div>}
 			<div className={"box" + (dropping ? " dropping" : "")} data-drop={t("dropMention")}
 				onDragOver={(e) => { if (!e.dataTransfer.types.includes(SLIDE_MIME)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropping(true); }}
 				onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false); }}
@@ -509,6 +507,8 @@ function Composer() {
 					onKeyUp={(e) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) sense(text, e.currentTarget.selectionStart); }} />
 				<div className="bar">
 					<ScopeLine text={text} setText={setText} ta={ta} />
+					{/* 보낼 곳(세션). 범위 줄이 「어디에」면 이것은 「어느 세션으로」. 세션이 생긴 뒤부터 보이고, 보고 있는 대화와 다른 세션으로 가면 진하게 */}
+					{sessions.length > 0 && <span className={"route" + (route.key && route.key !== talkKey ? " away" : "")} title={`${routeText}\n${t("sessionHint")}`}>{routeText}</span>}
 					{sendBtn}
 				</div>
 			</div>

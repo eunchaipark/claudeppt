@@ -264,7 +264,7 @@ const persistTalk = (dir: string, st: Pick<S, "turns" | "sessions" | "bind" | "t
 /** 다음 세션 — s1 · s2 … */
 const nextSession = (list: Session[]): Session => ({ key: "s" + (Math.max(0, ...list.map((x) => Number(x.key.slice(1)) || 0)) + 1), claude: null, at: Date.now() });
 /** 이 기기를 쓰는 팀원 — 판의 작성자로도 남긴다 */
-const me = () => useSettings.getState().s.me.trim();
+export const me = () => useSettings.getState().s.me.trim();
 
 /**
  * 이 요청이 갈 세션 — 보내기와 요청칸의 「보낼 곳」 미리보기가 같은 규칙을 쓴다.

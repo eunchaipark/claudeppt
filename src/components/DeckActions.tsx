@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, join } from "../lib/api";
 import { safeName } from "../lib/deck";
 import { useT } from "../lib/i18n";
-import { useDeck } from "../lib/store";
+import { me, useDeck } from "../lib/store";
 
 export default function DeckActions() {
 	const t = useT();
@@ -62,7 +62,7 @@ function ExportPop({ onDone }: { onDone: () => void }) {
 				<button onClick={async () => {
 					onDone();
 					const p = await save({ defaultPath: base + ".cppt", filters: [{ name: "ClaudePPT", extensions: ["cppt"] }] });
-					if (p) { await api.commit(dir, t("direct")).catch(() => {}); await api.pack(dir, p).then(() => notify(p.split(/[\\/]/).pop()!), (e) => notify(String(e), "err")); }
+					if (p) { await api.commit(dir, t("direct"), me()).catch(() => {}); await api.pack(dir, p).then(() => notify(p.split(/[\\/]/).pop()!), (e) => notify(String(e), "err")); }
 				}}>
 					{t("cppt")}<span>{t("cpptHint")}</span>
 				</button>

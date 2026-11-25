@@ -4,7 +4,7 @@ import { createDeck, readDeck, safeName, writeDeck } from "./deck";
 import { linkFonts } from "./fonts";
 import { importPptx } from "./importPptx";
 import { useSettings } from "./settings";
-import { useDeck } from "./store";
+import { me, useDeck } from "./store";
 import { tNow } from "./i18n";
 
 /** 저장 폴더 안에서 아직 없는 폴더 이름 — 같은 이름이 있으면 뒤에 번호를 붙인다 */
@@ -40,7 +40,7 @@ export async function importDeck(path: string, step: (i: number, n: number) => v
 	// 글꼴 별칭을 첫 판에 함께 담는다. 2026.11.24 : 열 때만 이어서, 열지 않고 가져온 덱(CLI --no-open)의 쪽 그림 · 내보내기가 대체 글꼴로 가늘게 나왔다
 	await linkFonts(dir, deck).catch(() => {});
 	// 첫 판은 여기서 남긴다 — 바로 열지 않으면 openProject 의 첫 판 남기기가 늦어져, 아래 「원본 쪽 그림」이 첫 판 이름을 가져간다
-	await api.commit(dir, "PPTX 가져옴");
+	await api.commit(dir, "PPTX 가져옴", me());
 	// 원본 쪽 그림 — PowerPoint 가 있으면 뒤에서 뽑는다. 없으면 조용히 넘어간다
 	api.pptSnapshot(join(dir, "source", "original.pptx"), join(dir, "source", "pages"), deck.size.w, deck.size.h).then(async (pages) => {
 		if (!pages) return;
