@@ -53,7 +53,7 @@ pub fn fs_exists(root: String, rel: String) -> Res<bool> {
 
 /// 큰 파일을 날바이트로 주고받는다. base64 문자열로 오가면 수백 MB PPTX 에서 웹뷰가 메모리를 못 이겨 멈춘다
 /// (base64 로 ⅓ 불고 · JSON 문자열로 한 번 더 복사되고 · JS 에서 글자마다 다시 바이트로 바꾼다).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn abs_read_bytes(path: String) -> Res<tauri::ipc::Response> {
 	Ok(tauri::ipc::Response::new(std::fs::read(path).map_err(err)?))
 }
@@ -68,7 +68,7 @@ pub fn fs_write_bytes(request: tauri::ipc::Request) -> Res<()> {
 }
 
 /// 사용자가 고른 파일을 프로젝트 안으로 복사한다 — 원본 PPTX 를 JS 로 들였다 내보내지 않으려고.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn abs_copy_in(src: String, root: String, rel: String) -> Res<()> {
 	let p = inside(&root, &rel)?;
 	ensure_parent(&p)?;

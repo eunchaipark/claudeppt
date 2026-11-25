@@ -81,7 +81,7 @@ pub struct LibItem {
 }
 
 /// 저장 폴더 바로 아래에서 deck.json 이 있는 폴더를 찾는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn library_list(dir: String) -> Res<Vec<LibItem>> {
 	let mut out = vec![];
 	let Ok(rd) = std::fs::read_dir(&dir) else { return Ok(out) };
@@ -98,7 +98,7 @@ pub fn library_list(dir: String) -> Res<Vec<LibItem>> {
 }
 
 /// 프로젝트 폴더를 .cppt 한 파일로 묶는다. 앱이 쓰는 임시 상태(.claudeppt/run) 는 뺀다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pack_deck(dir: String, out: String) -> Res<()> {
 	let root = PathBuf::from(&dir);
 	let file = std::fs::File::create(&out).map_err(err)?;
@@ -128,7 +128,7 @@ pub fn pack_deck(dir: String, out: String) -> Res<()> {
 }
 
 /// .cppt 를 dest 폴더에 푼다. dest 가 이미 있으면 뒤에 번호를 붙인다. 푼 폴더 경로를 돌려준다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unpack_deck(file: String, dest: String) -> Res<String> {
 	let mut target = PathBuf::from(&dest);
 	let mut n = 2;

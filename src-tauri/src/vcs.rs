@@ -5,6 +5,10 @@
 //   되돌리기      지난 판의 파일을 지금 위에 덮어 새 판으로 남긴다. 이력은 지우지 않는다 (앞으로만 간다).
 //
 // 사용자의 git 설정(이름 · 줄끝 변환)에 기대지 않도록 매번 -c 로 준다.
+//
+// 앱 명령은 #[tauri::command(async)] — 화면(메인) 스레드가 아니라 스레드 풀에서 돈다.
+// git 을 여러 번 띄우고 다른 판 남기기를 최대 60초 기다리므로(lock), 화면 스레드에서 돌면 그동안 창 전체가 멈춘다.
+// CLI(cli.rs)는 같은 함수를 그대로 동기로 부른다.
 
 use crate::{Res, err, hidden};
 use serde::Serialize;
@@ -22,6 +26,14 @@ fn git(dir: &Path) -> Command {
 		"-c", "user.email=claudeppt@local",
 		"-c", "commit.gpgsign=false",
 		"-c", "tag.gpgsign=false",
+		// 사용자 전역 설정이 덱 저장소에 끼어들지 않게.
+		// 훅(전역 core.hooksPath · init 템플릿)이 판 남기기를 막거나 늦추고, fsmonitor 는 덱마다 상주 프로세스를 남기고,
+		// log.showSignature · color.ui 는 git log 출력에 줄을 끼워 판 목록 읽기를 깬다
+		"-c", "core.hooksPath=.git/claudeppt-no-hooks",
+		"-c", "core.fsmonitor=false",
+		"-c", "log.showSignature=false",
+		"-c", "color.ui=false",
+		"-c", "i18n.logOutputEncoding=utf-8",
 	]);
 	c
 }
@@ -46,7 +58,7 @@ const IGNORE: &str = "# 앱이 쓰는 상태(핀 · 대화 · 임시 파일) —
 .claudeppt/
 ";
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vcs_init(dir: String) -> Res<()> {
 	let d = Path::new(&dir);
 	std::fs::create_dir_all(d).map_err(err)?;
@@ -73,7 +85,7 @@ pub struct Commit {
 
 /// 바뀐 것이 있으면 한 판으로 남기고 그 판을 돌려준다. 없으면 None.
 /// author — 이 판을 시킨 팀원 이름. 주면 git 작성자로 남는다 (판을 남기는 이는 그대로 ClaudePPT)
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vcs_commit(dir: String, message: String, author: Option<String>) -> Res<Option<Commit>> {
 	vcs_init(dir.clone())?;
 	let _l = lock(Path::new(&dir))?;
@@ -133,7 +145,7 @@ fn head(d: &Path) -> Res<Commit> {
 	Ok(vcs_log(d.to_string_lossy().into(), Some(1))?.into_iter().next().ok_or("판이 없다")?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 	let d = Path::new(&dir);
 	if run(d, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
@@ -173,7 +185,7 @@ pub fn vcs_log(dir: String, limit: Option<u32>) -> Res<Vec<Commit>> {
 		.collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vcs_tag(dir: String, name: String) -> Res<()> {
 	run(Path::new(&dir), &["tag", &name]).map(|_| ())
 }
@@ -182,7 +194,7 @@ pub fn vcs_tag(dir: String, name: String) -> Res<()> {
 /// 그 판의 파일을 덮어 새 판으로 남긴다.
 /// releases/ · source/ 는 덱 내용이 아니라 기록이다 — 되돌려도 지우거나 옛것으로 바꾸지 않는다.
 /// (지우면 릴리즈 PPTX · 원본 쪽 그림이 사라지고, 다음 릴리즈가 같은 r<k> 를 다시 단다)
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vcs_restore(dir: String, hash: String, message: String, author: Option<String>) -> Res<Option<Commit>> {
 	let d = Path::new(&dir);
 	vcs_init(dir.clone())?;
@@ -249,6 +261,36 @@ mod tests {
 		assert!(!p.join("b.txt").exists());
 		// 잠금 파일이 남지 않는다
 		assert!(!p.join(".git").join("claudeppt-commit.lock").exists());
+		let _ = std::fs::remove_dir_all(p);
+	}
+
+	/// 저장소 설정에 훅 · 서명 표시 · 색을 켜 두어도 (사용자 전역 설정과 같은 효과) 판 남기기 · 판 목록이 그대로 된다
+	#[test]
+	fn user_git_config_does_not_leak_in() {
+		let dir = tmp("isolate");
+		let p = Path::new(&dir);
+		vcs_init(dir.clone()).unwrap();
+		let hooks = p.join(".git").join("hooks");
+		std::fs::create_dir_all(&hooks).unwrap();
+		std::fs::write(hooks.join("pre-commit"), "#!/bin/sh\necho blocked >&2\nexit 1\n").unwrap();
+		std::fs::write(hooks.join("commit-msg"), "#!/bin/sh\nexit 1\n").unwrap();
+		for (k, v) in [("core.hooksPath", ".git/hooks"), ("log.showSignature", "true"), ("color.ui", "always"), ("core.fsmonitor", "true")] {
+			let ok = Command::new("git").current_dir(p).args(["config", k, v]).status().unwrap().success();
+			assert!(ok, "git config {k}");
+		}
+		std::fs::write(p.join("a.txt"), "1").unwrap();
+		let c = vcs_commit(dir.clone(), "첫 판".into(), None).unwrap().expect("훅이 판 남기기를 막았다");
+		assert_eq!((c.n, c.subject.as_str()), (1, "첫 판"));
+		std::fs::write(p.join("a.txt"), "2").unwrap();
+		vcs_commit(dir.clone(), "둘째 판".into(), None).unwrap().unwrap();
+		vcs_tag(dir.clone(), "r1".into()).unwrap();
+		let log = vcs_log(dir.clone(), None).unwrap();
+		assert_eq!(log.iter().map(|c| (c.n, c.subject.as_str())).collect::<Vec<_>>(), [(2, "둘째 판"), (1, "첫 판")]);
+		assert_eq!(log[0].tags, ["r1"]);
+		assert_eq!(log[0].hash.len(), 40);
+		let r = vcs_restore(dir.clone(), log[1].hash.clone(), "v1 로".into(), None).unwrap().unwrap();
+		assert_eq!(r.n, 3);
+		assert_eq!(std::fs::read_to_string(p.join("a.txt")).unwrap(), "1");
 		let _ = std::fs::remove_dir_all(p);
 	}
 }
