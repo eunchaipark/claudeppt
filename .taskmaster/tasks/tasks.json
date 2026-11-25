@@ -351,21 +351,22 @@
         "id": "17",
         "title": "[마무리] 1차 시험 결과 · 내일 사용자 시험 안내서",
         "description": "자동 작업에서 한 1차 시험 결과를 모으고, 사용자가 내일 직접 해 볼 시험을 단계별로 적는다.",
-        "details": "각 작업의 시험 기록(.taskmaster/docs/autorun-log.md)을 모아 .taskmaster/docs/test-guide.md 를 쓴다: (1) 무엇을 만들었고 어느 브랜치에 있는지, (2) 내가 이미 확인한 것(자동 시험 · 개발 실행 · 스크린샷 경로)과 확인하지 못한 것, (3) 사용자가 해 볼 시험 — 내 PC 한 대에서 브라우저 탭으로, 다른 PC 에서 같은 와이파이로, 바깥(휴대폰 LTE 등)에서 — 각 단계의 기대 결과, (4) 알려진 한계 · 남은 일. 앱을 띄우는 방법(개발 실행 또는 빌드)도 적는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "각 작업의 시험 기록(.taskmaster/docs/autorun-log.md)을 모아 .taskmaster/docs/test-guide.md 를 쓴다: (1) 무엇을 만들었고 어느 브랜치에 있는지, (2) 내가 이미 확인한 것(자동 시험 · 개발 실행 · 스크린샷 경로)과 확인하지 못한 것, (3) 사용자가 해 볼 시험 — 내 PC 한 대에서 브라우저 탭으로, 다른 PC 에서 같은 와이파이로, 바깥(휴대폰 LTE 등)에서 — 각 단계의 기대 결과, (4) 알려진 한계 · 남은 일. 앱을 띄우는 방법(개발 실행 또는 빌드)도 적는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 23:24] .taskmaster/docs/test-guide.md — 만든 것 · 띄우는 법 · 확인한 것 · A(이 PC) B(같은 와이파이) C(바깥, 도구 설치) 시험 순서와 기대 · 한계 · 보안 1건. 안내서 단계 A 는 개발 실행에서 모두 따라 해 봄(앞 작업들). 더해서 release 빌드로 설치 판 길(asset_resolver 화면 · immutable · gzip · 장부 이어짐) 확인",
         "testStrategy": "안내서의 단계를 내가 따라 할 수 있는 만큼 따라 해 보고 결과를 적는다",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "16"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:24:59.015Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:15:40.937Z",
+      "lastModified": "2026-11-25T14:24:58.843Z",
       "taskCount": 17,
-      "completedCount": 15,
+      "completedCount": 16,
       "tags": [
         "collab"
       ]
