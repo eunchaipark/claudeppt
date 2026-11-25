@@ -507,8 +507,13 @@ function Composer() {
 					onKeyUp={(e) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) sense(text, e.currentTarget.selectionStart); }} />
 				<div className="bar">
 					<ScopeLine text={text} setText={setText} ta={ta} />
-					{/* 보낼 곳(세션). 범위 줄이 「어디에」면 이것은 「어느 세션으로」. 세션이 생긴 뒤부터 보이고, 보고 있는 대화와 다른 세션으로 가면 진하게 */}
-					{sessions.length > 0 && <span className={"route" + (route.key && route.key !== talkKey ? " away" : "")} title={`${routeText}\n${t("sessionHint")}`}>{routeText}</span>}
+					{/* 보낼 곳(세션). 범위 줄이 「어디에」면 이것은 「어느 세션으로」. 세션이 생긴 뒤부터 보이고, 보고 있는 대화와 다른 세션으로 가면 진하게.
+					    줄에는 세션 번호만, 까닭(어느 쪽을 처음 고친 세션인지)은 툴팁에. 까닭까지 적으면 좁은 사이드바에서 범위 줄이 두 줄로 밀린다 */}
+					{sessions.length > 0 && (
+						<span className={"route" + (route.key && route.key !== talkKey ? " away" : "")} title={`${routeText}\n${t("sessionHint")}`}>
+							{route.key ? `→ ${t("sessionN").replace("{n}", route.key.slice(1))}` : t("routeNew")}
+						</span>
+					)}
 					{sendBtn}
 				</div>
 			</div>

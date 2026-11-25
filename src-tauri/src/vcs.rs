@@ -196,3 +196,59 @@ pub fn vcs_restore(dir: String, hash: String, message: String, author: Option<St
 	run(d, &["checkout", &hash, "--", ".", ":(exclude)releases", ":(exclude)source"])?;
 	commit_all(d, &message, author.as_deref())
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn tmp(name: &str) -> String {
+		let d = std::env::temp_dir().join(format!("cppt-vcs-{name}-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&d);
+		std::fs::create_dir_all(&d).unwrap();
+		d.to_string_lossy().into()
+	}
+
+	#[test]
+	fn author_is_kept_on_each_version() {
+		let dir = tmp("author");
+		let p = Path::new(&dir);
+		std::fs::write(p.join("a.txt"), "1").unwrap();
+		let c = vcs_commit(dir.clone(), "first".into(), Some("민수".into())).unwrap().unwrap();
+		assert_eq!(c.author, "민수");
+		assert_eq!(c.n, 1);
+		// 바뀐 것이 없으면 판을 남기지 않는다
+		assert!(vcs_commit(dir.clone(), "same".into(), Some("민수".into())).unwrap().is_none());
+		// 이름이 없으면 ClaudePPT · 꺾쇠는 빼고 · 빈 이름은 없는 것으로
+		std::fs::write(p.join("a.txt"), "2").unwrap();
+		assert_eq!(vcs_commit(dir.clone(), "no name".into(), None).unwrap().unwrap().author, "ClaudePPT");
+		std::fs::write(p.join("a.txt"), "3").unwrap();
+		assert_eq!(vcs_commit(dir.clone(), "brackets".into(), Some("<은지>".into())).unwrap().unwrap().author, "은지");
+		std::fs::write(p.join("a.txt"), "4").unwrap();
+		assert_eq!(vcs_commit(dir.clone(), "blank".into(), Some("  ".into())).unwrap().unwrap().author, "ClaudePPT");
+		// 제목에 탭이 있어도 작성자 · 제목이 섞이지 않는다
+		std::fs::write(p.join("a.txt"), "5").unwrap();
+		let t = vcs_commit(dir.clone(), "tab\there".into(), Some("지호".into())).unwrap().unwrap();
+		assert_eq!((t.author.as_str(), t.subject.as_str()), ("지호", "tab\there"));
+		let log = vcs_log(dir.clone(), None).unwrap();
+		assert_eq!(log.iter().map(|c| c.author.as_str()).collect::<Vec<_>>(), ["지호", "ClaudePPT", "은지", "ClaudePPT", "민수"]);
+		let _ = std::fs::remove_dir_all(p);
+	}
+
+	#[test]
+	fn restore_keeps_author() {
+		let dir = tmp("restore");
+		let p = Path::new(&dir);
+		std::fs::write(p.join("a.txt"), "1").unwrap();
+		let v1 = vcs_commit(dir.clone(), "v1".into(), Some("민수".into())).unwrap().unwrap();
+		std::fs::write(p.join("a.txt"), "2").unwrap();
+		std::fs::write(p.join("b.txt"), "new").unwrap();
+		vcs_commit(dir.clone(), "v2".into(), Some("은지".into())).unwrap();
+		let r = vcs_restore(dir.clone(), v1.hash.clone(), "back".into(), Some("지호".into())).unwrap().unwrap();
+		assert_eq!(r.author, "지호");
+		assert_eq!(std::fs::read_to_string(p.join("a.txt")).unwrap(), "1");
+		assert!(!p.join("b.txt").exists());
+		// 잠금 파일이 남지 않는다
+		assert!(!p.join(".git").join("claudeppt-commit.lock").exists());
+		let _ = std::fs::remove_dir_all(p);
+	}
+}
