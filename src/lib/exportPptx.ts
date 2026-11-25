@@ -192,8 +192,8 @@ export async function buildPptx(deck: Deck, projectId: string, progress: (i: num
 	}
 	progress(deck.slides.length, deck.slides.length);
 	const raw = (await pptx.write({ outputType: "uint8array" })) as Uint8Array;
-	// 묶기가 어긋나도 내보내기는 살린다 — 묶지 않은 파일이 묶다 깨진 파일보다 낫다
-	const out = await groupSlides(raw, plan).catch((e) => { console.warn("group", e); return raw; });
+	// 묶기 · 그림 합치기가 어긋나도 내보내기는 살린다 — 손보지 않은 파일이 손보다 깨진 파일보다 낫다
+	const out = await tidyZip(raw, plan).catch((e) => { console.warn("tidy", e); return raw; });
 	return { data: out, missingFonts: [...fonts.missing], locked };
 }
 
@@ -241,9 +241,47 @@ function boundsOf(el: Element) {
 	return { x, y, r: x + +ext.getAttribute("cx")!, b: y + +ext.getAttribute("cy")! };
 }
 
-async function groupSlides(data: Uint8Array, plan: ({ chains: number[][]; names: Record<number, string> } | null)[]): Promise<Uint8Array> {
-	if (!plan.some((p) => p && p.chains.some((c) => c.length))) return data;
+/** 다 쓴 PPTX 손보기 — 도형 묶기 · 같은 그림 합치기. 바꾼 것이 없으면 그대로 돌려준다 */
+async function tidyZip(data: Uint8Array, plan: ({ chains: number[][]; names: Record<number, string> } | null)[]): Promise<Uint8Array> {
 	const zip = await JSZip.loadAsync(data);
+	const grouped = await groupSlides(zip, plan).catch((e) => { console.warn("group", e); return false; });
+	const merged = await dedupeMedia(zip);
+	if (!grouped && !merged) return data;
+	// 그림은 이미 압축된 꼴(PNG · JPEG)이라 다시 DEFLATE 해도 작아지지 않고 시간만 든다 — 그대로(STORE) 담는다
+	for (const n of Object.keys(zip.files)) {
+		if (n.startsWith("ppt/media/") && !zip.files[n].dir) zip.file(n, await zip.file(n)!.async("uint8array"), { compression: "STORE" });
+	}
+	return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+/** 같은 그림은 한 파일로 — pptxgenjs 는 쪽마다(같은 로고 · 같은 사진이어도) 그림 파일을 따로 넣는다.
+ *  내용(SHA-1 · 크기)이 같으면 첫 파일만 두고 관계(rels)의 대상을 그리로 돌린다 */
+async function dedupeMedia(zip: JSZip): Promise<boolean> {
+	const media = Object.keys(zip.files).filter((n) => n.startsWith("ppt/media/") && !zip.files[n].dir);
+	if (media.length < 2) return false;
+	const first = new Map<string, string>();
+	const alias = new Map<string, string>();
+	for (const n of media) {
+		const bytes = await zip.file(n)!.async("uint8array");
+		const h = [...new Uint8Array(await crypto.subtle.digest("SHA-1", bytes as BufferSource))].map((b) => b.toString(16).padStart(2, "0")).join("") + ":" + bytes.length;
+		const k = first.get(h);
+		if (k) alias.set(n, k);
+		else first.set(h, n);
+	}
+	if (!alias.size) return false;
+	for (const n of Object.keys(zip.files).filter((n) => n.endsWith(".rels"))) {
+		const x = await zip.file(n)!.async("string");
+		// 「"」 까지 맞춘다 — image-1-1 이 image-1-10 의 앞부분과 섞이지 않게
+		let y = x;
+		for (const [dup, keep] of alias) y = y.split(`media/${dup.slice("ppt/media/".length)}"`).join(`media/${keep.slice("ppt/media/".length)}"`);
+		if (y !== x) zip.file(n, y);
+	}
+	for (const dup of alias.keys()) zip.remove(dup);
+	return true;
+}
+
+async function groupSlides(zip: JSZip, plan: ({ chains: number[][]; names: Record<number, string> } | null)[]): Promise<boolean> {
+	if (!plan.some((p) => p && p.chains.some((c) => c.length))) return false;
 	let changed = false;
 	for (let i = 0; i < plan.length; i++) {
 		const p = plan[i];
@@ -289,5 +327,5 @@ async function groupSlides(data: Uint8Array, plan: ({ chains: number[][]; names:
 		zip.file(path, new XMLSerializer().serializeToString(doc));
 		changed = true;
 	}
-	return changed ? zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }) : data;
+	return changed;
 }
