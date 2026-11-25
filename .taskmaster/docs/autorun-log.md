@@ -84,3 +84,13 @@
   - 개발 실행: 설정 claude 경로를 잠시 가짜 claude(`cmd` → `ping -n 120`)로 바꿔 턴을 띄우고(보낸 뒤 설정은 바로 되돌림) 앱 프로세스를 강제 종료 — **고치기 전: cmd · conhost · PING 살아남음(손으로 끔) / 고친 뒤: 모두 꺼짐**
   - 설정 파일 확인: claude 경로 "" · opus · xhigh · 이름 은채 그대로
 - 확인하지 못한 것: 실제 업데이트 설치 흐름(설치 판 필요) · WinGet/Scoop 으로 깐 PC
+
+## collab #5 — 자동 설치가 쓰던 글 · 바깥 세션을 기다리게 (19:13 ~ 19:22)
+
+- 브랜치: `fix/update-waits-for-draft` → **원본 PR a7garden/claudeppt#6** · collab 합침 `9c13988`
+- 바꾼 것: 설치를 미룰 까닭을 `holdsUpdate()` 로 — 일(턴 · 막는 일 · 뒤 일) · **보내지 않은 요청 글 · 첨부**(다시 켜면 사라짐, 핀은 덱에 남아 제외) · 바깥 Claude Code **5분**(보내기 전 묻는 기준 OUTSIDE_MS 와 같게, 전에는 2분)
+  - 협업 접속자가 있으면 미루기는 C1 서버(#7)를 만들 때 `holdsUpdate` 에 더한다
+  - 원본의 담당 presence 는 담당 세션도 CLI 를 거치며 `outside` 를 갱신하므로 따로 보지 않음
+- 시험(개발 실행, fix · collab 둘 다): 빈칸 `null` · 요청칸 실제 입력 `draft` · 지움 `null` · 첨부 `draft` · 지움 `null` · 바깥 3분 전 `outside`(전에는 설치됐을 때) · 6분 전 `null` · 턴 도는 중 `work`
+  - 시험 함정: 브랜치를 바꾸면 Vite 가 모듈 주소에 `?t=` 를 붙여, `import("/src/lib/x.ts")` 는 앱과 다른 인스턴스가 된다 → `performance` 의 실제 주소로 불러야 함
+- 확인하지 못한 것: 설치 판에서 실제 업데이트가 미뤄졌다 설치되는 흐름(개발 실행은 자동 업데이트를 안 함)

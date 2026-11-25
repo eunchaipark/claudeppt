@@ -169,7 +169,7 @@
         "id": "4",
         "title": "[C0] claude 실행 파일 찾기 보강 · 앱을 꺼도 claude 가 남는 문제",
         "description": "where claude 만 써서 ~/.local/bin 설치를 못 찾고, 창을 닫아도 claude 프로세스가 계속 돈다. master #2 · #3.",
-        "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:13] fix/claude-find-and-cleanup 7?? → 원본 PR a7garden/claudeppt#5 · collab 합침 0287fb0. job object(KILL_ON_JOB_CLOSE)로 claude 와 자식까지 앱과 함께 끝남 · claude 찾기 PATH→네이티브/npm/WinGet/Scoop 자리, 찾은 경로 기억. 시험: cargo test 2개(찾는 자리 순서 · job 닫으면 cmd→ping 꺼짐) · 개발 실행 가짜 claude(cmd→ping) 턴 중 앱 강제 종료: 고치기 전 cmd·conhost·PING 살아남음 / 고친 뒤 모두 꺼짐. 확인 못 함: 실제 업데이트 설치 흐름, WinGet·Scoop 설치 PC",
+        "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:13] fix/claude-find-and-cleanup c05fd27 → 원본 PR a7garden/claudeppt#5 · collab 합침 0287fb0. job object(KILL_ON_JOB_CLOSE)로 claude 와 자식까지 앱과 함께 끝남 · claude 찾기 PATH→네이티브/npm/WinGet/Scoop 자리, 찾은 경로 기억. 시험: cargo test 2개(찾는 자리 순서 · job 닫으면 cmd→ping 꺼짐) · 개발 실행 가짜 claude(cmd→ping) 턴 중 앱 강제 종료: 고치기 전 cmd·conhost·PING 살아남음 / 고친 뒤 모두 꺼짐. 확인 못 함: 실제 업데이트 설치 흐름, WinGet·Scoop 설치 PC",
         "testStrategy": "PATH 에 ~/.local/bin 없이 앱을 띄워 claude 를 찾는지, 턴 도중 창을 닫았을 때 claude.exe 가 남지 않는지(Get-Process)",
         "status": "done",
         "dependencies": [],
@@ -181,14 +181,15 @@
         "id": "5",
         "title": "[C0] 작업 중 · 접속 중에는 자동 업데이트가 다시 켜지 않게",
         "description": "0.6 의 쉬는 틈 자동 설치가 Claude 턴 · 바깥 세션 · 쓰던 요청 글을 제대로 보지 않는다. 호스트가 다시 켜지면 팀원 모두가 끊긴다. master #27.",
-        "details": "updater.ts quiet(): 도는 턴이 있거나, 쓰던 요청 글 · 첨부 · 핀 초안이 있거나, (C1 이후) 협업 접속자가 있으면 미룬다. 바깥 세션 대기 기준을 앱의 다른 기준과 맞춘다. 원본에 담당이 남아 있으면 원본용 fix PR 에서는 담당 presence 도 본다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md",
+        "details": "updater.ts quiet(): 도는 턴이 있거나, 쓰던 요청 글 · 첨부 · 핀 초안이 있거나, (C1 이후) 협업 접속자가 있으면 미룬다. 바깥 세션 대기 기준을 앱의 다른 기준과 맞춘다. 원본에 담당이 남아 있으면 원본용 fix PR 에서는 담당 presence 도 본다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:18] fix/update-waits-for-draft 21f5be1 → 원본 PR a7garden/claudeppt#6 · collab 합침 9c13988. holdsUpdate(): 일(턴·막는 일·뒤 일) · 보내지 않은 글/첨부 · 바깥 세션(5분, store OUTSIDE_MS 와 같게). 협업 접속자 조건은 C1(#7) 서버를 만들 때 holdsUpdate 에 더한다. 원본 담당 presence 는 바깥 CLI touch(outside)로 이미 잡혀 따로 보지 않음. 시험: 개발 실행(fix · collab 둘 다)에서 상황마다 holdsUpdate — 빈칸 null · 글 draft · 지움 null · 첨부 draft · 바깥 3분 outside · 6분 null · 턴 work",
         "testStrategy": "updater 의 quiet 판정을 조건별로 확인하는 작은 시험(가짜 시계) 또는 개발 실행에서 조건을 만들어 확인",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T10:18:48.350Z"
       },
       {
         "id": "6",
@@ -351,9 +352,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T10:13:43.348Z",
+      "lastModified": "2026-11-25T10:18:48.140Z",
       "taskCount": 17,
-      "completedCount": 4,
+      "completedCount": 5,
       "tags": [
         "collab"
       ]
