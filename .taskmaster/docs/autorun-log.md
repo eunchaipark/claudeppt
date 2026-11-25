@@ -1,6 +1,27 @@
 # 자동 작업 기록
 
-(맨 위 요약은 끝낼 때 쓴다)
+## 요약 (2026-11-26 00:20 끝냄 · 2026-11-25 18:29 시작)
+
+**끝낸 것**
+- collab 17개 중 16개 완료, 1개 blocked(#11). 모두 fork `collab` 브랜치(원본 0.7.0 위)에 있음 · 마지막 커밋 8e2a3b1
+- master 남은 작업(최적화 · 취약 의존성) 모두 완료: #8 · #9 · #10 · #12 · #13 · #14 · #16 · #17 · #18
+
+**원본(a7garden/claudeppt)에 보낸 PR — 모두 열림, 관리자 리뷰 대기**
+- 고장 수정: #4 명령을 화면 스레드 밖으로 · #5 claude 찾기 · 앱과 함께 끄기 · #6 자동 설치가 쓰던 글 · 팀원을 기다림 · #7 리스너 한 벌
+- 최적화 · 의존성: #8 image-size · #9 답 글자 묶기 · #10 frames 누수 · #11 굽기 글꼴 · #12 프롬프트 캐시 · #13 EMF 일꾼 · #14 그림 합치기 · #15 Rust 중복 의존성 · #16 지연 로딩
+- 협업 기능 PR 은 보내지 않음 — 이슈 #1 관리자 답 대기 + 사용자 확인 뒤(계획: `upstream-plan.md`)
+- 처음 기여라 PR 의 CI 는 관리자가 승인해야 돈다
+
+**blocked**
+- collab #11 바깥 길: 이 PC 에 tailscale · cloudflared 가 없음. 남의 프로그램을 깔고 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않음. 코드 · 가짜 cloudflared 시험은 끝남 → `test-guide.md` 4-C
+
+**먼저 보실 것**
+1. 보안 1건 — 원본에 비공개 보고함(GHSA, triage). 자세한 내용은 공개 저장소에 적지 않았고 아침 대화 요약에 따로 적음
+2. `test-guide.md` 4-A(이 PC 한 대, 5분) → 4-B(같은 와이파이) → 7(최적화)
+3. `gh auth refresh -s workflow` — fork 가 원본 최신 두 커밋(라이선스 · README, workflow 파일 포함)을 받지 못하고 있음. 권한을 주시면 fork main 을 맞추고 collab 에 합침
+4. 협업 PR 을 원본에 보낼지 · 스위치 뒤에 둘지(`upstream-plan.md`)
+
+**정리**: 시험 덱 「제목 없음 2」 지움 · 사용자 덱 「제목 없음」 그대로 · 설정(claude opus · xhigh, 내 이름 은채) 그대로 · 개발 실행 · Edge 시험 프로필 끔
 
 ## 2026-11-25 준비 (16시대, 사용자와 함께)
 
@@ -266,3 +287,12 @@
 - 바꾼 것: zip 2 → 9 · dirs 6 → 7 · base64 0.22 → 0.23 (tauri · 업데이터가 쓰는 판). zip 9 의 `name()` 이 Result — 글꼴 zip 의 읽히지 않는 이름은 건너뜀
 - **reqwest 는 그대로(0.12)**: 0.13 은 rustls 암호 공급자를 따로 설치해야 하는데 그림 생성 HTTPS(OpenAI · Gemini) 길을 키 없이 시험할 수 없어서
 - 확인: cargo test(collab 24 · 원본 8) · .cppt 묶기 → 풀기 왕복 파일 125개 바이트 같음 · 판 이력 12 그대로 · sha2 0.11 로도 저장된 기기 해시로 민수가 들어옴
+
+## master #16 — pptxgenjs · jszip 지연 로딩 (~ 00:15)
+
+- 브랜치: `perf/lazy-pptx` 73ffb3d → **원본 PR a7garden/claudeppt#16** · collab 같은 변경 8e2a3b1
+- 바꾼 것: 내보내기(exportPptx) · 대조 검사(check) · 가져오기(importPptx)를 store · remote · flows 에서 쓸 때 `import()`. 판 비교 렌즈가 쓰는 `compare` 를 check.ts 에서 `pixdiff.ts` 로 뗌(몸통 그대로, check.ts 는 다시 내보냄) — 떼지 않으면 렌즈 때문에 내보내기가 시작 청크에 남음. fixDiff 는 검사 모듈을 불러온 뒤 요청문, 못 불러오면 알림
+- 잰 것(`npm run build`): 시작 청크 **원본 835.66 kB(gzip 273.25) → 424.08 kB(135.31)** · collab 863.22 kB(282.19) → 450.72 kB(144.07). 떨어진 청크 exportPptx 287 kB · jszip 96 kB · importPptx 28 kB · check 2 kB
+- 시험(개발 실행 · 시험 덱 「제목 없음 2」): 덱을 열기만 하면 무거운 모듈을 받지 않음(resource 목록) · 내보내기 1.3초에 그때 받음 → 뒤따르는 PowerPoint 대조 검사 알림 + 「차이 고치기」 · 「모양 그대로」 내보내기 · fixDiff(보내기를 가로채 요청문만 확인, 진짜 Claude 안 부름) · slideMask 같은 판 0% · compare 합성 그림 7.2%(기대 ≈7.2) · 내보낸 PPTX 가져오기 7쪽 경고 없음(만든 덱 t16 은 지움) · 바깥 CLI `export` · `check` ok
+- 원본 브랜치는 같은 스크립트(`scratchpad/perf16.cjs`)로 넣음 — collab 원래 파일에 다시 돌려 지금 파일과 줄 단위로 같음을 확인
+- 확인하지 못한 것: 설치 판에서 청크를 처음 받는 시간

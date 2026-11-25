@@ -77,12 +77,13 @@
         "id": "16",
         "title": "[M4] [성능] pptxgenjs · jszip 지연 로딩 (811KB 단일 청크)",
         "description": "store · remote · flows · versions 가 정적 import 라 시작 청크에 들어간다.",
-        "details": "store.ts:21-22, remote.ts:16,20, flows.ts:5, versions.ts:13. versions.ts 는 check.compare 를 거쳐 pptxgenjs 까지 끈다 → compare 분리, import type, exportTo · verify · import 안에서 await import(). 로컬 앱이라 체감은 작다 — 시작 파싱 시간만. [0.6.0 재검증] 유효. store.ts:24-25, remote.ts:20 · 24, flows.ts:5, versions.ts:13.",
+        "details": "store.ts:21-22, remote.ts:16,20, flows.ts:5, versions.ts:13. versions.ts 는 check.compare 를 거쳐 pptxgenjs 까지 끈다 → compare 분리, import type, exportTo · verify · import 안에서 await import(). 로컬 앱이라 체감은 작다 — 시작 파싱 시간만. [0.6.0 재검증] 유효. store.ts:24-25, remote.ts:20 · 24, flows.ts:5, versions.ts:13.\n\n2026-11-26 00:15 완료. collab 8e2a3b1 · upstream PR #16 (perf/lazy-pptx 73ffb3d). 시작 청크 upstream 835.66→424.08 kB (gzip 273.25→135.31), collab 863.22→450.72 kB. compare 를 pixdiff.ts 로 옮김. 개발 실행 · CLI 로 내보내기 · 검사 · 차이 고치기 · 판 비교 · 가져오기 확인",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T15:14:00.809Z"
       },
       {
         "id": "17",
@@ -123,9 +124,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:59:27.721Z",
+      "lastModified": "2026-11-25T15:14:00.650Z",
       "taskCount": 10,
-      "completedCount": 9,
+      "completedCount": 10,
       "tags": [
         "master"
       ]
