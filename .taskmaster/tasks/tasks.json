@@ -65,12 +65,13 @@
         "id": "14",
         "title": "[M4] [성능] 내보내기: 그림 중복 제거 · 압축 정리 · check 를 Worker 로",
         "description": "같은 그림이 쪽 수만큼 저장되고, PNG 를 다시 DEFLATE 하며, 픽셀 비교가 메인 스레드에서 돈다.",
-        "details": "exportPptx.ts:161, 253-292: ppt/media/* 해시로 rels Target 합치기, XML 만 DEFLATE · 미디어 STORE. 효과 없는 <img> 는 원본 바이트 + crop 으로(rt.js:341). exportPptx.ts:106,118 / check.ts:129 한 iframe 에서 extract+snapshot, iframe 2~3개 풀. check.ts:42-98 compare 를 pixdiff.ts 로 떼어 Worker + OffscreenCanvas, 저장은 convertToBlob → writeBytes. imagegen.ts:18-35 그림 생성 동시 2~3개. [0.6.0 재검증] 유효. exportPptx.ts:292.",
+        "details": "exportPptx.ts:161, 253-292: ppt/media/* 해시로 rels Target 합치기, XML 만 DEFLATE · 미디어 STORE. 효과 없는 <img> 는 원본 바이트 + crop 으로(rt.js:341). exportPptx.ts:106,118 / check.ts:129 한 iframe 에서 extract+snapshot, iframe 2~3개 풀. check.ts:42-98 compare 를 pixdiff.ts 로 떼어 Worker + OffscreenCanvas, 저장은 convertToBlob → writeBytes. imagegen.ts:18-35 그림 생성 동시 2~3개. [0.6.0 재검증] 유효. exportPptx.ts:292.\n\n[완료 23:50] perf/export-media → 원본 PR #14 · collab 같은 변경. tidyZip(한 번 열어 묶기 + 같은 그림 합치기, 그림 STORE). 잰 것: 같은 1.76MB 그림 세 쪽 덱 5.77MB→2.20MB, rels 59 모두 있음, PowerPoint 로 열림. 하지 않음(범위 줄임): 효과 없는 img 원본 바이트+crop, extract/snapshot 한 iframe, check 비교 Worker 로, 그림 생성 동시 — 효과 대비 크고 위험해 다음으로",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-11-25T14:50:47.122Z"
       },
       {
         "id": "16",
@@ -121,9 +122,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:47:34.595Z",
+      "lastModified": "2026-11-25T14:50:46.974Z",
       "taskCount": 10,
-      "completedCount": 7,
+      "completedCount": 8,
       "tags": [
         "master"
       ]
