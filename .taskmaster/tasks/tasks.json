@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "8",
+        "id": 8,
         "title": "[M0] [성능] 스트리밍 답 반영 묶기 + 대화 · 쪽 목록 다시 그리기 줄이기",
         "description": "text_delta 조각마다 set({turns}) → 모든 턴과 쪽 목록(Rail)이 다시 그려진다.",
         "details": "store.ts:301-304 리스너에서 delta 버퍼 → rAF 마다 한 번 patch. Talk.tsx:77 TurnView 를 memo, onVersion 을 안으로. Workspace.tsx:258,266 Rail 은 s.turns.at(-1)?.tools 만 구독, RailItem memo. Rust 쪽 claude.rs:157-159 emit 도 tauri::ipc::Channel 또는 30ms 묶음. 경계 끌기(Workspace.tsx:152-176)는 Rail·Stage·Talk memo + pointerup 때만 localStorage. [0.6.0 재검증] 유효 + 넓어짐. store.ts:374-378, Talk.tsx:79 · 165, Workspace.tsx:261 · 274 · 150-160, claude.rs:156-159. 추가: Workspace.tsx:271 useTick(10000) 이 담당이 있으면 쪽 목록 전체를 10초마다 다시 그린다.\n\n[완료 23:32] perf/stream-batch d67cbf0 → 원본 PR #9 · collab 같은 커밋. 30ms 글자 묶기(타이머, 다른 사건 앞 · 턴 끝 비움) · TurnView memo(onVersion 안으로) · Rail 마지막 턴 tools 만 구독. 잰 것(조각 300): 상태 갱신 300→18~21, DOM 301→19~22, 막힘 227~426ms→32~39ms, 1.5~1.7s→0.6~0.7s. 순서 · 판 단추 확인. 하지 않음: Rust emit 묶기(Channel) — 프론트 묶기로 충분, 경계 끌기 memo",
@@ -14,7 +14,7 @@
         "updatedAt": "2026-11-25T14:32:05.181Z"
       },
       {
-        "id": "9",
+        "id": 9,
         "title": "[M0] [성능] 떨어진 iframe 창 누수 고치기",
         "description": "unmount 정리 때 contentWindow 가 이미 null 이라 frames Set 에서 지워지지 않고 쌓인다.",
         "details": "Workspace.tsx:29-32. onLoad 에서 winRef.current=win 으로 잡고 정리에서 frames.delete(winRef.current). closeProject 에서 frames.clear(). 쪽 넘기기 · 핫 리로드 · 썸네일 · @ 미리보기마다 쌓인다. [0.6.0 재검증] 유효. Workspace.tsx:32-35, closeProject(store.ts:408-420)에서 frames 안 비움.\n\n[완료 23:34] perf/frames-leak → 원본 PR #10 · collab 같은 변경. winRef 로 지우기 + closeProject 에서 frames.clear(). 잰 것: 20번 넘기기 + 다시 그리기 5번에 frames 4→28 (고치기 전) / 3→3 (고친 뒤), 무대 창 등록 유지, 닫으면 0",
@@ -26,7 +26,7 @@
         "updatedAt": "2026-11-25T14:34:23.634Z"
       },
       {
-        "id": "10",
+        "id": 10,
         "title": "[M0] [성능] 굽기(bake)마다 넣는 2.8MB 글꼴 줄이기",
         "description": "fontCss() 가 모든 @font-face 를 base64 data URL 로 바꿔 bake 마다 SVG 에 통째로 넣는다.",
         "details": "rt.js:228-237, 308-309. 복제본에 글자가 없으면(img · svg · 바탕만) 글꼴 서식 생략. 하위 트리 계산 fontFamily 에 나오는 가족만. 부모가 한 번 만들어 extract 메시지로 넘기기. 「숨은 iframe 이 답하지 않는다」 20s 시간 초과와의 관계도 확인. [0.6.0 재검증] 유효. rt.js:304-313 fontCss, :385.\n\n[완료 23:38] perf/bake-fonts → 원본 PR #11 · collab 같은 변경. 가족별 글꼴 · 처음 쓸 때 data: · 글자 쓰는 가족만. 잰 것: 흐림 장식 8개 덱 내보내기 1.3~1.4s → 0.38~0.41s, 구운 그림 바이트 같음(장식 8 · 글자 있는 쪽 통째)",
@@ -38,7 +38,7 @@
         "updatedAt": "2026-11-25T14:38:06.080Z"
       },
       {
-        "id": "12",
+        "id": 12,
         "title": "[M0] [성능] 시스템 프롬프트의 바뀌는 값 빼기 (프롬프트 캐시)",
         "description": "Slides: N 이 시스템 프롬프트에 있어 쪽 수가 바뀔 때마다 이어 온 대화 전체 캐시가 깨진다.",
         "details": "prompt.ts:88 # Deck 구획을 turnPrompt 로 옮기고 번호 · 파일 · 제목 짧은 목차를 함께 넣어 deck.json 을 읽으러 오가는 일도 줄인다. 효과는 사용량 표시 작업의 cache_read 로 잰다. [0.6.0 재검증] 유효. prompt.ts:95.\n\n[완료 23:40] perf/prompt-cache → 원본 PR #12 · collab 같은 변경. 시스템 프롬프트는 크기 · 출처 · 스타일 · 말만, 제목 · 쪽 수 · 목차(80쪽까지)는 요청문. 확인: 제목 · 쪽 수 바뀌어도 systemPrompt 글 같음, 진짜 Claude 2턴(쪽 3→4)에서 2턴 cache_read 8240 · create 239",
@@ -50,7 +50,7 @@
         "updatedAt": "2026-11-25T14:40:58.987Z"
       },
       {
-        "id": "13",
+        "id": 13,
         "title": "[M4] [성능] EMF 변환 묶음 처리",
         "description": "EMF 한 장마다 PowerShell 을 띄우고 Add-Type 으로 C# 를 새로 컴파일한다(0.85s/장).",
         "details": "metafile.rs:61-69, importPptx.ts:571-572. Add-Type -OutputAssembly 로 DLL 을 앱 데이터에 한 번 만들기 또는 목록을 한 번에 받는 묶음 명령. 장기: windows crate 로 GDI+ 직접. 미디어는 source/original.pptx 에서 Rust 가 바로 꺼내기(importPptx.ts:819). [0.6.0 재검증] 유효. metafile.rs:62-67, importPptx.ts:572.\n\n[완료 23:47] perf/emf-worker → 원본 PR(13) · collab 같은 변경. PowerShell 일꾼(한 번 컴파일, 줄마다 한 장, 30초 쉬면 끔, base64 경로). 잰 것: EMF 6장 3.5s → 1.1s(첫 장 0.64s, 이후 0.07~0.12s), PNG 바이트 같음. cargo test 새 시험(한글·따옴표 경로, 오류 뒤 유지, 둘째부터 0.4s 안). 하지 않음: 미디어를 Rust 가 zip 에서 바로 꺼내기, GDI+ 직접",
@@ -62,7 +62,7 @@
         "updatedAt": "2026-11-25T14:47:34.810Z"
       },
       {
-        "id": "14",
+        "id": 14,
         "title": "[M4] [성능] 내보내기: 그림 중복 제거 · 압축 정리 · check 를 Worker 로",
         "description": "같은 그림이 쪽 수만큼 저장되고, PNG 를 다시 DEFLATE 하며, 픽셀 비교가 메인 스레드에서 돈다.",
         "details": "exportPptx.ts:161, 253-292: ppt/media/* 해시로 rels Target 합치기, XML 만 DEFLATE · 미디어 STORE. 효과 없는 <img> 는 원본 바이트 + crop 으로(rt.js:341). exportPptx.ts:106,118 / check.ts:129 한 iframe 에서 extract+snapshot, iframe 2~3개 풀. check.ts:42-98 compare 를 pixdiff.ts 로 떼어 Worker + OffscreenCanvas, 저장은 convertToBlob → writeBytes. imagegen.ts:18-35 그림 생성 동시 2~3개. [0.6.0 재검증] 유효. exportPptx.ts:292.\n\n[완료 23:50] perf/export-media → 원본 PR #14 · collab 같은 변경. tidyZip(한 번 열어 묶기 + 같은 그림 합치기, 그림 STORE). 잰 것: 같은 1.76MB 그림 세 쪽 덱 5.77MB→2.20MB, rels 59 모두 있음, PowerPoint 로 열림. 하지 않음(범위 줄임): 효과 없는 img 원본 바이트+crop, extract/snapshot 한 iframe, check 비교 Worker 로, 그림 생성 동시 — 효과 대비 크고 위험해 다음으로",
@@ -74,7 +74,7 @@
         "updatedAt": "2026-11-25T14:50:47.122Z"
       },
       {
-        "id": "16",
+        "id": 16,
         "title": "[M4] [성능] pptxgenjs · jszip 지연 로딩 (811KB 단일 청크)",
         "description": "store · remote · flows · versions 가 정적 import 라 시작 청크에 들어간다.",
         "details": "store.ts:21-22, remote.ts:16,20, flows.ts:5, versions.ts:13. versions.ts 는 check.compare 를 거쳐 pptxgenjs 까지 끈다 → compare 분리, import type, exportTo · verify · import 안에서 await import(). 로컬 앱이라 체감은 작다 — 시작 파싱 시간만. [0.6.0 재검증] 유효. store.ts:24-25, remote.ts:20 · 24, flows.ts:5, versions.ts:13.\n\n2026-11-26 00:15 완료. collab 8e2a3b1 · upstream PR #16 (perf/lazy-pptx 73ffb3d). 시작 청크 upstream 835.66→424.08 kB (gzip 273.25→135.31), collab 863.22→450.72 kB. compare 를 pixdiff.ts 로 옮김. 개발 실행 · CLI 로 내보내기 · 검사 · 차이 고치기 · 판 비교 · 가져오기 확인",
@@ -86,7 +86,7 @@
         "updatedAt": "2026-11-25T15:14:00.809Z"
       },
       {
-        "id": "17",
+        "id": 17,
         "title": "[M0] [업그레이드] Rust 중복 의존성 정리",
         "description": "reqwest 0.12/0.13, zip 2/9, dirs 6/7, base64 0.22/0.23 이 두 벌씩 컴파일된다(cargo tree -d 실측).",
         "details": "Cargo.toml: reqwest 0.13(default-features=false, json + rustls 계열, updater.rs 방식대로 setup 에서 crypto provider install_default), zip 9(SimpleFileOptions · start_file · add_directory · enclosed_name · by_index 그대로), dirs 7, base64 0.23. reqwest 0.12+rustls-tls 는 내장 webpki-roots 라 회사 루트 인증서를 안 믿는다는 판단 → 0.13 platform-verifier 로 바로잡힘(확인 필요). notify 9 · debouncer-mini 0.8 도 검토. Tauri 3 은 알파 — 2 유지. 끝나면 cargo tree -d 로 확인. [0.6.0 재검증] 유효. Cargo.toml 그대로.\n\n[완료 23:59] chore/rust-dup-deps → 원본 PR #15 · collab(+sha2 0.11). zip 2→9 · dirs 6→7 · base64 0.22→0.23. reqwest 는 0.12 유지(0.13 은 rustls 공급자 설치 필요, 그림 생성 HTTPS 시험 못 함). 확인: cargo test, .cppt 왕복 125파일 바이트 같음 · 판 이력 같음, 저장된 기기 해시 그대로 통과. notify 9 · debouncer 0.8 은 검토만(중복 아님)",
@@ -98,7 +98,7 @@
         "updatedAt": "2026-11-25T14:59:27.936Z"
       },
       {
-        "id": "18",
+        "id": 18,
         "title": "[보안] 의존성 취약점 — image-size(high, DoS) 고치기",
         "description": "npm audit 의 high 1건. pptxgenjs 가 쓰는 image-size 가 조작된 그림에서 끝없이 돈다. 협업으로 원격 팀원이 첨부 · 그림을 올리므로 호스트를 멈출 수 있다.",
         "details": "npm audit fix 로 image-size 를 고친 판으로(pptxgenjs 3.12 가 받는 범위 안이면 그대로, 아니면 overrides). 내보내기 · 가져오기가 그대로 되는지 확인. pptxgenjs 4 올리기는 이 작업에 넣지 않는다(기능). cargo audit 이 깔려 있지 않으면 Rust 쪽은 cargo tree 로 알려진 취약 크레이트만 훑는다.\n\n[완료 23:27] fix/image-size-audit → 원본 PR(아래 기록) · collab 합침. overrides image-size ^2.0.3(2.1.0). npm audit 0 · build 통과 · 번들에 image-size 없음(브라우저 번들은 원래 안 씀 → 실제로는 닿지 않던 경로) · 개발 실행 PPTX 내보내기(글자 · 그림 굽기) 그대로. Rust: cargo audit 없음 — 새로 깐 크레이트(axum · tower-http · sha2)는 최신 판",
@@ -118,7 +118,7 @@
         "priority": "high",
         "description": "앱이 seats.json · presence.json 을 잠금 없이, 원자적이지 않게 덮어쓴다. 쓰는 도중 바깥 세션이 join 하면 담당이 없다고 읽고 「모든 권한 1번」으로 덮어써 사용자가 정한 담당이 사라진다. 0.5.0 에서 생김.",
         "details": "store.ts:611-622 saveSeats · vacate 가 최대 8초 묵은 화면 사본을 api.writeText → fsx.rs:36-40 std::fs::write(비원자적)로 쓴다. seats.rs 의 잠금(seats.lock)을 거치지 않아 CLI 의 join · adopt · doing · seen 변경을 덮어쓴다. 쓰는 중 CLI 가 읽으면 seats.rs read() 가 None → list() 빈 목록 → join()(seats.rs:235-238)이 1번 모든 권한을 만들어 save. 고침: 담당 쓰기를 Rust 명령으로 옮겨 seats.rs 잠금 + 임시 파일 바꿔 달기(seats.rs write 와 같은 방식)로, 화면은 바뀐 칸만 보내 잠금 안에서 최신 파일에 합친다. join 은 파일이 있는데 못 읽었으면 빈 목록으로 보지 말고 잠시 뒤 다시 읽기. 원본에 보낼 첫 PR 후보. [완료 2026-11-25] PR a7garden/claudeppt#3 으로 원본에 합쳐졌다(0.7.0, 커밋 2a5adaf). 관리자 요청 세 가지(임시 파일 + 이름 바꾸기, 같은 seats.lock, 없음/못 읽음 가르기)를 담았다.",
-        "id": "26",
+        "id": 26,
         "updatedAt": "2026-11-25T07:25:57.384Z"
       }
     ],
@@ -129,13 +129,15 @@
       "completedCount": 10,
       "tags": [
         "master"
-      ]
+      ],
+      "created": "2026-11-26T02:30:51.225Z",
+      "description": "Tasks for master context"
     }
   },
   "collab": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "[C0] feat/team-sessions 를 원본 0.7.0 위 collab 줄기로 옮기기",
         "description": "담당 제거 · 팀원 세션(장표 세션 규칙) · 보낸 사람 표시 · 세션 목록 · 새 대화 · 보낼 곳을 0.7.0(요청칸 범위 줄 · 파일 첨부)과 합친다.",
         "details": "fork 브랜치 collab 을 upstream/main(0.7.0)에서 따고 feat/team-sessions 의 커밋 3개(2e8a488 · 043d420 · b998e92)를 옮긴다. 0.7.0 의 Talk.tsx(범위 줄 · 첨부) · store.ts · app.css · i18n.ts 와 겹치는 곳을 손으로 맞춘다 — 0.7.0 의 범위 줄 위치에 「보낼 곳」을 함께 두는 등 원본 화면 모양을 따른다. 0.7.0 이 담당을 다시 건드렸으면 그것도 걷어낸다. 화면 문구는 원본 규칙대로: 한영 함께, 긴 대시(—) 없이, 안내문은 「~습니다」. 이후 collab 작업은 모두 collab 브랜치에 쌓는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 18:44] 브랜치 collab(fork, 0.7.0 c36069a 위) · 커밋 1ea29f4 52315f7 dda8da1 0dbdefc b7b7f7b. 원본 최신 두 커밋(9203878 라이선스 · eaf02ce README)은 workflow 파일 변경이 있어 fork 에 못 올림(gh 토큰에 workflow 권한 없음) → 사용자가 gh auth refresh -s workflow 뒤 합친다. 시험: tsc · cargo check 경고 0 · cargo test vcs 2개(작성자 · 되돌리기) · 개발 실행 가짜 Claude 두 팀원 8요청 라우팅 기대값 일치 · 보낼 곳 미리보기 · 세션 목록 · 세션별 보기 · 새 대화 · 이름 막기 · 첨부만 보내기 · 판 목록 작성자 · 다시 열기 · 옛 talk.json 옮기기",
@@ -147,7 +149,7 @@
         "updatedAt": "2026-11-25T09:44:17.060Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "[C0] 판 남기기를 화면 스레드 밖으로 (창이 최대 60초 멈춤)",
         "description": "vcs_* 가 동기 명령이라 판 잠금을 기다리는 동안 앱 창이 멈춘다. 여럿이 동시에 쓰면 더 자주 걸린다. master #7.",
         "details": "vcs.rs 의 vcs_init · vcs_commit · vcs_log · vcs_tag · vcs_restore 와 project.rs · fsx.rs 의 동기 명령을 #[tauri::command(async)] 로. 덱별 잠금은 기존 .git/claudeppt-commit.lock 를 쓴다. 가능하면 commit 의 git 호출 수를 줄이고(status --porcelain), 전역 git 설정 격리(GIT_CONFIG_NOSYSTEM · 훅 끄기 · gc.auto=0). 원본에도 이로운 고장 수정이므로 upstream/main 에서 딴 fix 브랜치로 PR 을 보내고(규칙 참고), collab 에도 합친다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 18:53] 브랜치 fix/commands-off-main-thread(0fcfec7, fork main=0.7.0 위) → 원본 PR a7garden/claudeppt#4 · collab 에 합침(9320232). 바꾼 것: vcs_* · library_list · pack/unpack_deck · abs_read_bytes · abs_copy_in 을 #[tauri::command(async)] (원본 seats 와 같은 방식, CLI 동기 호출 그대로) + git -c 격리(hooksPath · fsmonitor · log.showSignature · color.ui · i18n.logOutputEncoding). 하지 않은 것: git 호출 수 줄이기(효과 작고 원본 vcs 와 충돌 커짐), GIT_CONFIG_NOSYSTEM(Windows 의 core.fscache 를 잃어 오히려 느려짐), gc.auto=0(느슨한 개체가 끝없이 쌓임). 시험: cargo test 새 시험(격리 줄을 빼면 실패 확인) · 개발 실행에서 판 잠금을 쥔 채 판 남기기 → 다른 명령 지연 고치기 전 4333ms / 고친 뒤 2~3ms (fix 와 collab 둘 다)",
@@ -159,7 +161,7 @@
         "updatedAt": "2026-11-25T09:53:57.522Z"
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "[C0] 장표 세션 복구 — 이어 받기가 실패해도 그 세션이 먹통이 되지 않게",
         "description": "세션 기록이 없어지면(덱 폴더 이동 · .cppt 풀기) --resume 이 계속 실패한다. master #1 을 장표 세션 구조에 맞춰 고친다.",
         "details": "claude stderr 의 'No conversation found' 를 잡으면 그 세션의 claude id 를 비우고, 그 세션의 최근 턴 요약(요청자 포함)을 앞에 붙여 한 번 새로 돌린다. 턴이 끝날 때 ~/.claude/projects/<작업 폴더>/<id>.jsonl 을 덱 .claudeppt/sessions/<id>.jsonl 로 복사하고, 덱을 열 때 없으면 되돌려 놓는다(되돌린 뒤 --resume 이 되는지 먼저 실험). 새 세션은 처음부터 --session-id 로 앱이 id 를 정한다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:06] collab 9e0707a. 새 세션 --session-id(앱이 uuid) · 턴 끝에 ~/.claude/projects/<key>/<id>.jsonl → 덱 .claudeppt/sessions/ 복사 · --resume 전에 없으면 옛 자리/덱 것을 놓음 · 그래도 No conversation found 면 세션 요약(시킨 사람 포함)을 앞에 붙여 새 세션으로 한 번 더 + 알림. 시험: cargo test 3개(폴더 이름 규칙 실측값 · id 거르기 · 남기기/되돌리기/덮지 않기/경로 넘기기 막기) · 진짜 Claude 2턴(sonnet low): 1턴 id=앱이 정한 uuid, 기록 두 곳 같은 크기 → claude 쪽 기록 지움 → 2턴 resume 성공, 답 「은채 님이 1쪽 제목 글자를 … 바꿔 달라고 요청했습니다」 · 가짜 Claude 로 요약 잇기(요약에 은채/민수 요청 · 답 · 파일, 알림, 다음 요청은 새 id 로 resume)",
@@ -173,7 +175,7 @@
         "updatedAt": "2026-11-25T10:06:20.210Z"
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "[C0] claude 실행 파일 찾기 보강 · 앱을 꺼도 claude 가 남는 문제",
         "description": "where claude 만 써서 ~/.local/bin 설치를 못 찾고, 창을 닫아도 claude 프로세스가 계속 돈다. master #2 · #3.",
         "details": "claude.rs resolve(): 설정 경로 → where → %USERPROFILE%\\.local\\bin\\claude.exe → npm 전역 → WinGet Links, 찾은 경로 기억. 앱 종료(RunEvent::Exit · ExitRequested · 0.7 자동 설치 재시작)에서 도는 claude 를 모두 끈다(taskkill /T 또는 Job Object). 원본에도 이로운 고장 수정 — fix 브랜치 PR + collab 에 합침. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:13] fix/claude-find-and-cleanup c05fd27 → 원본 PR a7garden/claudeppt#5 · collab 합침 0287fb0. job object(KILL_ON_JOB_CLOSE)로 claude 와 자식까지 앱과 함께 끝남 · claude 찾기 PATH→네이티브/npm/WinGet/Scoop 자리, 찾은 경로 기억. 시험: cargo test 2개(찾는 자리 순서 · job 닫으면 cmd→ping 꺼짐) · 개발 실행 가짜 claude(cmd→ping) 턴 중 앱 강제 종료: 고치기 전 cmd·conhost·PING 살아남음 / 고친 뒤 모두 꺼짐. 확인 못 함: 실제 업데이트 설치 흐름, WinGet·Scoop 설치 PC",
@@ -185,7 +187,7 @@
         "updatedAt": "2026-11-25T10:13:43.528Z"
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "[C0] 작업 중 · 접속 중에는 자동 업데이트가 다시 켜지 않게",
         "description": "0.6 의 쉬는 틈 자동 설치가 Claude 턴 · 바깥 세션 · 쓰던 요청 글을 제대로 보지 않는다. 호스트가 다시 켜지면 팀원 모두가 끊긴다. master #27.",
         "details": "updater.ts quiet(): 도는 턴이 있거나, 쓰던 요청 글 · 첨부 · 핀 초안이 있거나, (C1 이후) 협업 접속자가 있으면 미룬다. 바깥 세션 대기 기준을 앱의 다른 기준과 맞춘다. 원본에 담당이 남아 있으면 원본용 fix PR 에서는 담당 presence 도 본다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:18] fix/update-waits-for-draft 21f5be1 → 원본 PR a7garden/claudeppt#6 · collab 합침 9c13988. holdsUpdate(): 일(턴·막는 일·뒤 일) · 보내지 않은 글/첨부 · 바깥 세션(5분, store OUTSIDE_MS 와 같게). 협업 접속자 조건은 C1(#7) 서버를 만들 때 holdsUpdate 에 더한다. 원본 담당 presence 는 바깥 CLI touch(outside)로 이미 잡혀 따로 보지 않음. 시험: 개발 실행(fix · collab 둘 다)에서 상황마다 holdsUpdate — 빈칸 null · 글 draft · 지움 null · 첨부 draft · 바깥 3분 outside · 6분 null · 턴 work",
@@ -199,7 +201,7 @@
         "updatedAt": "2026-11-25T10:18:48.350Z"
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "[C1] 전송층 분리 — 같은 화면이 Tauri 와 브라우저 양쪽에서",
         "description": "api.ts 의 invoke · listen · deckUrl 을 transport 한 층으로 모은다. 호스트 앱은 Tauri, 브라우저는 WebSocket/HTTP.",
         "details": "api.ts 의 명령을 transport.call(name,args) 로, listen 쓰는 곳(store.ts · remote.ts · fonts.ts · Settings.tsx)을 transport.on 으로. 원격에서는 Tauri 전용(대화 상자 · 창 단추 · 내보내기 · 설정)을 숨긴다(capabilities 플래그). 호스트 동작은 그대로여야 한다. 함께: openProject 를 겹쳐 불러도 사건 리스너가 두 벌 붙지 않게 모듈에서 한 번만 등록(원격 접속이 늘면 글자가 두 번 찍힌다, 옛 master #6). 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f(합쳐 올라감) · bee1818. transport.ts(call: Tauri invoke / 원격 /_/rpc 읽기만, 경로→id), api.ts 를 그 위로, deckUrl 원격은 /_/deck. store 리스너 앱에 한 벌(listening ??=). 원격은 listen 을 쓰는 길(openProject · startRemote · fonts · Settings)을 타지 않게 막음. 시험: tsc · 호스트 개발 실행에서 새 덱 · 쪽 추가 · 직접 편집 판 · 가짜 턴 그대로",
@@ -213,7 +215,7 @@
         "updatedAt": "2026-11-25T10:33:51.280Z"
       },
       {
-        "id": "7",
+        "id": 7,
         "title": "[C1] 협업 서버 — 「설정 › 협업」(기본 꺼짐) 뒤 axum HTTP + WebSocket",
         "description": "호스트 앱 안에 서버를 띄워 앱 화면 · 슬라이드 · 원격 API · 사건을 내준다. 켜기 전에는 아무것도 바뀌지 않는다.",
         "details": "axum 0.8(ws) + tower-http. 화면은 Tauri asset_resolver(개발 실행은 Vite 1424 프록시), 슬라이드는 lib.rs serve() 재사용(경로 검사 포함), 사건: 파일 변경 · 턴 글자(30ms 묶음) · 세션 · 판 · 접속 · 의견, 일련번호 + 재접속 다시 받기. 원격 API 는 허용 목록뿐. 모든 요청에 토큰/쿠키(C2 전에는 호스트가 만든 임시 토큰). 바인드: 켜면 LAN, 끄면 닫음. 먼저 기술 검증: asset_resolver 로 화면 내주기, WebSocket 왕복. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f. collab.rs(axum 0.8): /_/ws · /_/rpc(read·exists·log만) · /_/deck(serve 재사용) · /__rt.js · 화면(설치 판 asset_resolver, 개발은 Vite 넘김). 열쇠: ?k= → 쿠키(HttpOnly·SameSite=Lax) + 주소에서 뗌. 의도 허용 목록(INTENTS) · 3시간 대기. 설정 › 협업 탭(기본 꺼짐). 시험: cargo test 3개 · curl: 열쇠 없음/틀림 401, 링크 303+쿠키, 슬라이드 200+런타임, ..%5C·../ 403, rpc 읽기 OK · 밖 경로 400 · write 400 · log OK. 호스트 새로 고침 뒤 다시 붙음(resumeHost)",
@@ -227,7 +229,7 @@
         "updatedAt": "2026-11-25T10:33:51.376Z"
       },
       {
-        "id": "8",
+        "id": 8,
         "title": "[C1] 브라우저로 같이 보기 + 누가 어디 보는지",
         "description": "팀원 브라우저가 같은 덱을 실시간으로 본다. 쪽 목록 · 무대 · 이어 보기 · 대화(세션 목록 포함) · 판 목록. 누가 어느 쪽을 보는지 표시.",
         "details": "원격 화면은 같은 React 를 transport=remote 로. 파일 변경 사건으로 바뀐 쪽만 다시 그림. 접속 표시: 썸네일 옆 사람 머리글자, 무대 머리 「보는 중: …」, 사람을 누르면 따라가기. 글꼴: 호스트에 깔린 local() 글꼴은 /fonts 로 내줌. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:33] collab af78d0f. 원격=같은 React, 호스트 상태(덱·턴·세션·판·핀) 바뀐 칸만 30ms 묶어 방송, 턴은 바뀐 턴만. 보는 사람 몫(보는 쪽·지금 대화·도구) 따로. 접속 표시: 쪽 목록 번호 옆 · 무대 오른쪽 위 머리글자(누르면 그 쪽으로) · 제목 줄 n명 접속. 시험: Edge(9334)로 LAN 주소 링크 → 덱 보임, 호스트가 쪽 추가 · 글 고침 → 브라우저 바로 반영, 가짜 턴 글자 흐름 · 세션 · 판 반영, 이름 민수 → 호스트 쪽 목록 · 무대에 민, 호스트 보는 쪽 → 브라우저에 은. 글꼴(/fonts) 은 #9 에서",
@@ -241,7 +243,7 @@
         "updatedAt": "2026-11-25T10:33:51.463Z"
       },
       {
-        "id": "9",
+        "id": 9,
         "title": "[C1] 원격 대역폭 · 캐시 · 슬라이드 보안",
         "description": "Funnel 처럼 느린 길에서도 첫 화면이 10초 안에. 남의 브라우저가 슬라이드 스크립트를 돌리므로 CSP. master #11 · #15 · #19.",
         "details": "deck:// · 서버 응답: 자산 ETag + no-cache, 판 고정 주소 immutable, HTML · CSS · JS 압축. 원격 쪽 목록은 썸네일 PNG(rt.js snapshot, 내용 해시 캐시). Pretendard 를 unicode-range 조각으로. 슬라이드 HTML 에 CSP(connect-src 'self' 등). 원격 API 에서 abs_* · root 를 받는 fs_* 는 절대 노출 안 함. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:40] collab 77ccc83. 슬라이드 sandbox iframe(allow-scripts) + 덱 열쇠 주소 /_/d/<key>/ + CSP connect-src 'none' · ws/rpc Origin 검사 · ETag/no-cache(304) · @커밋 immutable · /assets immutable · gzip. 시험: 슬라이드 안 공격 4가지 막힘, 다른 Origin 403, 틀린 열쇠 401, 304, immutable, gzip 41→14.5KB. 하지 않음/남김: 원격 썸네일 PNG(쪽 목록이 iframe 이라 쪽이 많으면 무거움 — 캐시로 두 번째부터 가벼움), 호스트에 깔린 local() 글꼴 내주기(라이선스 · 크기 문제로 보류, 덱 assets/fonts 에 든 글꼴은 그대로 감), 느린 길 첫 화면 시간(설치 판 필요)",
@@ -255,7 +257,7 @@
         "updatedAt": "2026-11-25T10:40:59.266Z"
       },
       {
-        "id": "10",
+        "id": 10,
         "title": "[C2] 초대 링크 · 이름 한 번 · 참가자 관리",
         "description": "줌처럼 링크 하나로 들어온다. 처음 들어올 때 이름을 한 번 적고 브라우저가 기억한다. 인증 없음. 호스트가 참가자를 본다.",
         "details": "링크 https://<주소>/j/<토큰>: 공용(여럿, 이름 직접) · 개인(이름 고정). 첫 접속 때 이름 → 기기 쿠키(HttpOnly · SameSite=Strict) + 주소창에서 토큰 지움. 호스트 「협업」 창: 링크 만들기 · 복사 · 만료 · 다시 만들기, 참가자 목록, 내보내기, 대기실(선택), 회의 잠금. 토큰은 해시로만 .claudeppt/collab.json 에(.cppt 에서 빼기). 원격 팀원의 이름 = 요청 · 편집 · 판의 보낸 사람. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 19:59] collab c073978. invite.rs 장부(링크 공용/개인 · 만료 · 기기 SHA-256 · 잠금, 앱 데이터 collab.json) + /j/<열쇠> 이름 화면(한영) + 기기 쿠키 + 서버가 정한 이름 + 설정 협업 칸(링크 · 개인 링크 · 만료 · 잠금 · 들어온 사람 · 내보내기). 대기실은 하지 않음(선택 항목, 잠금으로 대신). 시험: cargo test invite 5개 · curl 9가지 · Edge 3프로필: 공용 링크 이름 화면→민수, 개인 링크 지호 바로, 잠금 중 새 사람 거절 화면 · 민수 새로 고침 OK, 지호 내보내기 → 즉시 끊김 + 덱 걷힘 + 새로 고침 401, 협업 껐다 켜기 · 앱 다시 띄우기 뒤 민수 저절로 다시 붙음",
@@ -269,7 +271,7 @@
         "updatedAt": "2026-11-25T10:59:23.471Z"
       },
       {
-        "id": "11",
+        "id": 11,
         "title": "[C2] 바깥 길 자동 — 사무실 밖에서도 같은 링크",
         "description": "협업을 켜면 Tailscale Funnel 이나 Cloudflare quick tunnel 을 감지해 띄우고 그 주소를 링크에 넣는다. 둘 다 없으면 LAN 주소(사무실 안에서만)라고 알린다.",
         "details": "imagegen 의 도구 감지처럼: tailscale(funnel 443) → cloudflared(tunnel --url) 순. 터널은 127.0.0.1 전용 포트에 붙이고, IP 로 믿는 길은 없다. 호스트 앱 제목 줄에 「바깥 열림 · n명」. 먼저 기술 검증: WebSocket 이 각 터널을 지나는지. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[blocked 20:04] collab 988f603 까지 만듦 — 감지(where + 깐 자리) · Tailscale Funnel(--bg --https=443, 끌 때 off) · cloudflared quick tunnel(주소 stderr 읽기, job 에 넣음) · 협업 켤 때 자동 · 링크 첫 주소 · 바깥 Origin 받기 · 설정 칸 · 제목 줄 「바깥 열림」. 시험: cargo test 3개(가짜 cloudflared 로 띄우기·주소·끄기 포함) + Origin · 개발 실행에서 도구 없음 안내 · 오류. **막힌 까닭: 이 PC 에 tailscale · cloudflared 가 없다** — 남의 프로그램을 받아 깔고 인터넷에 여는 일은 사용자 확인이 필요해 하지 않았다. 남은 일(사용자): cloudflared 설치(winget install Cloudflare.cloudflared) 또는 Tailscale 설치 + tailnet 에서 Funnel 허락 → 협업 켜기 → 휴대폰 LTE 로 링크 열기 · 대화 글자 흐름(WebSocket) 확인\n\n2026-11-26 09:45 완료(사용자가 cloudflared 설치를 맡김). cloudflared 2026.11.2 winget 설치 → 협업 켜기 4.4초에 trycloudflare 주소 저절로 열림 · 초대 링크가 그 주소로. 새 Edge 프로필로 바깥 주소 링크 → 이름 화면 → 들어옴(개발 실행 19초), wss 로 가짜 답 글자 20→100 이 호스트 발신 0.1~0.3초 안에 도착, 브라우저 의견 → 호스트 알림. 협업 끄기 → cloudflared 0 · 주소 502. 켜 둔 채 앱 강제 종료 → cloudflared 0(job). shots/c11-tunnel-*.png",
@@ -283,7 +285,7 @@
         "updatedAt": "2026-11-26T00:46:53.379Z"
       },
       {
-        "id": "12",
+        "id": 12,
         "title": "[C3] 브라우저에서 Claude 에게 요청 — 호스트 계정으로",
         "description": "팀원이 브라우저 대화칸에서 보낸다. 장표 세션 규칙(routeOf)대로 이어지고, 보낸 사람 = 링크 이름. Claude 는 호스트 계정.",
         "details": "원격 send 의도 → 호스트가 routeOf · 세션 · 판 작성자를 그대로 처리. 턴 글자 · 상태 · 세션 목록이 모든 화면에 사건으로. 첨부(0.7.0)는 원격에서 올린 파일을 호스트 .claudeppt/attach 로. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:18] collab bc550f9. 의도 send/stop/newTalk/upload · SendFrom(by·current·talkKey·pins·onStart) · 호스트 대화/핀 그대로 · 원격 첨부 10MB · send 문 하나(경쟁 상태 고침) · 잘못된 세션 id 도 복구. 시험: 가짜 Claude — 원격 새 대화 s2(호스트 s1 그대로), 원격 요청 → s2 · 2쪽 s2 확정 · 판 작성자 민수, 호스트가 2쪽 고치면 s2 잇기 + 알림, 바쁠 때 원격 → 「다른 요청 처리 중」, 원격 첨부 → 호스트 파일 · 턴 첨부 · 프롬프트, .exe 거절, 동시 두 요청 → 하나만. 진짜 Claude(sonnet low): 브라우저 민수 요청 → 기록 없는 세션 → 요약으로 새 세션 → 1쪽 부제 들어감 · 판 v6 작성자 민수",
@@ -298,7 +300,7 @@
         "updatedAt": "2026-11-25T11:18:35.749Z"
       },
       {
-        "id": "13",
+        "id": 13,
         "title": "[C3] 세션마다 대기열 · 다른 세션끼리 동시 실행",
         "description": "지금은 앱 전체가 한 번에 한 턴. 같은 세션은 차례로, 다른 세션은 동시에 돌게 한다.",
         "details": "store running(하나) → 세션별 실행 상태 Map, 사건 필터를 턴 id 로. 같은 세션 요청은 대기열(화면에 「대기 1 · 민수」). 호스트 동시 상한(기본 3). 판 남기기는 판 잠금으로 한 줄(C0 #2). 동시에 도는 턴끼리 판이 섞이지 않게: 턴이 고친 파일(tools)만 그 턴 판에 담는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:39] collab bb6078f. runs(세션→턴) · waiting 줄 · MAX_RUNS 3 · sendChain(세우기만 한 줄) · vcs_commit_paths · 대상 쪽 미리 붙이기 · 대기 중/취소 UI · stop(turn). 시험: cargo test commit_paths(경로 넘기기·:(literal)·남은 것 다음 판) · 가짜 Claude: s2 느린 턴과 s1 턴 동시, s1 둘째 요청 대기 후 이어 돎, 같은 쪽(@2) 요청은 s2 대기열로, 대기 취소, 판마다 그 턴 파일만, 끝나고 남은 변경 없음 · 라우팅 회귀 시험 같음 · 화면 대기 표시. 시험 중 사고: 첫 구현에서 async 가 약속을 풀어 줄이 막혔고, 시험 스크립트가 가짜 Claude 를 먼저 되돌려 진짜 Claude 턴 셋이 몇 초씩 돌았다(바로 멈춤) — 고치고 스크립트도 끝까지 기다리게 함",
@@ -313,7 +315,7 @@
         "updatedAt": "2026-11-25T11:39:44.161Z"
       },
       {
-        "id": "14",
+        "id": 14,
         "title": "[C3] 브라우저 팀원 직접 편집",
         "description": "브라우저에서도 글자 고치기 · 끌어 옮기기 · 방향키 · 지우기. 호스트가 한 줄로 받아 원본에 쓰고, 편집한 사람이 판에 남는다.",
         "details": "rt.js 직접 편집 의도(applyDirect)를 원격에서 호스트로. 같은 쪽을 누가 고치는 중이면 「○○ 이 고치는 중」 표시, Claude 가 그 쪽 턴을 도는 동안은 막음(지금 동작), 같은 요소는 나중 것이 이김. 되돌리기(Ctrl+Z)는 그 사람 것만. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:30] collab 0640682 (+ 보안 CSP 56183e1). 의도 direct/undo/redo · Snap{by,after} 사람별 안전한 되돌리기 · 판 작성자 여럿 · editing 나눔 + 「○○ 님이 고치는 중」 · histBy. 시험: 원격 applyDirect → 호스트 파일 · 표시 · 판 「민수 직접 편집」, 섞어 고친 뒤 민수 되돌리기 거절(둘 다 남음) · 은채 되돌리기/다시 하기 OK, 판 「은채 · 민수 직접 편집」, Edge 에서 실제 두 번 누르기 → 입력 → Enter 로 호스트 파일에 들어감. 하는 중 찾은 보안 문제 1건 비공개 보고(GHSA-9x34-8r55-j5qw)",
@@ -327,7 +329,7 @@
         "updatedAt": "2026-11-25T11:30:41.336Z"
       },
       {
-        "id": "15",
+        "id": 15,
         "title": "[C4] 공유 의견 — 핀 · 표시를 작성자 있는 의견으로",
         "description": "팀원끼리 피드백. 핀 · 표시에 작성자 · 해결 상태, 모두에게 보임, 「이 장표 세션에 보내기」.",
         "details": "pins.json 을 호스트가 한 곳에서 고치고 사건으로. 의견 목록(열림 · 해결), 받은 의견 알림. 「세션에 보내기」는 지금 핀이 요청칸 위에 쌓여 함께 가는 흐름 재사용 + 의견 작성자를 요청에 적음(「C 의견 반영」). 바깥 CLI 가 읽는 핀 꼴은 지킨다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 20:44] collab 106e2a1. Pin{by,done} · isMine · 의견 의도 5종 · sendPin · 의견 목록 · 알림 · 무대 남의 핀 읽기 전용 · CLI pins 해결 제외+by. 시험: 민수(브라우저)·은채(호스트) 서로 의견 → 서로 알림, 요청칸 위엔 각자 제 핀만, 「의견 2」, 민수가 은채 의견 세션에 보내기 → 턴 요청 「은채 님이 남긴 의견을 반영해 줘」 보낸 사람 민수 · 프롬프트 (comment by 은채), 은채가 민수 의견 해결 → 무대 · 점에서 사라짐 · 파일 done · 해결됨 목록, CLI pins 가 해결된 것 빼고 by 줌",
@@ -341,7 +343,7 @@
         "updatedAt": "2026-11-25T11:44:49.820Z"
       },
       {
-        "id": "16",
+        "id": 16,
         "title": "[C5] 원본 기여 정리",
         "description": "collab 줄기를 원본 규칙에 맞춰 나눈 PR 들로 준비한다. 이슈 #1 관리자 답(담당을 바꿀지 / 따로 둘지)에 따른다.",
         "details": "원본 규칙: 「설정 › 협업」 스위치 뒤(켜기 전 변화 없음) · PR 하나에 한 가지 · 판 번호 안 올림 · CHANGELOG 줄 · 한영 문구 · 긴 대시 없음 · 「~습니다」. 담당 처리는 관리자 답 전에는 하지 않는다. 협업 기능 PR 은 사용자 확인 뒤에만 보낸다(규칙 참고). 브랜치만 준비해 두고 기록에 남긴다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 23:15] 이슈 #1 관리자 답 아직 없음(담당 바꿀지/따로 둘지) → 협업 PR 은 보내지 않음. .taskmaster/docs/upstream-plan.md 에 보낸 것 · 작은 후보 · 협업 11개 PR 순서 · 스위치 · CHANGELOG 줄 · 보내기 전 손볼 것. 문구 점검: 긴 대시 0, 한영 키 349 일치, 안내문 「~습니다」(남은 6개는 상태 · 자리표시 · Claude 요청문). 작은 수정 원본 PR #7(리스너 한 벌) 보냄 — 겹쳐 열기 시험에서 글자 한 번",
@@ -355,7 +357,7 @@
         "updatedAt": "2026-11-25T14:15:41.250Z"
       },
       {
-        "id": "17",
+        "id": 17,
         "title": "[마무리] 1차 시험 결과 · 내일 사용자 시험 안내서",
         "description": "자동 작업에서 한 1차 시험 결과를 모으고, 사용자가 내일 직접 해 볼 시험을 단계별로 적는다.",
         "details": "각 작업의 시험 기록(.taskmaster/docs/autorun-log.md)을 모아 .taskmaster/docs/test-guide.md 를 쓴다: (1) 무엇을 만들었고 어느 브랜치에 있는지, (2) 내가 이미 확인한 것(자동 시험 · 개발 실행 · 스크린샷 경로)과 확인하지 못한 것, (3) 사용자가 해 볼 시험 — 내 PC 한 대에서 브라우저 탭으로, 다른 PC 에서 같은 와이파이로, 바깥(휴대폰 LTE 등)에서 — 각 단계의 기대 결과, (4) 알려진 한계 · 남은 일. 앱을 띄우는 방법(개발 실행 또는 빌드)도 적는다. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[완료 23:24] .taskmaster/docs/test-guide.md — 만든 것 · 띄우는 법 · 확인한 것 · A(이 PC) B(같은 와이파이) C(바깥, 도구 설치) 시험 순서와 기대 · 한계 · 보안 1건. 안내서 단계 A 는 개발 실행에서 모두 따라 해 봄(앞 작업들). 더해서 release 빌드로 설치 판 길(asset_resolver 화면 · immutable · gzip · 장부 이어짐) 확인",
@@ -367,6 +369,50 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-11-25T14:24:59.015Z"
+      },
+      {
+        "id": 18,
+        "title": "[요청 11-26] 고른 요소를 Claude 요청에 넣기",
+        "description": "무대에서 고른(select) 요소를 요청칸에 짚어 넣어 Claude 에게 그 요소를 가리키게 한다",
+        "details": "사용자 질문: 현재 PPT 에서 특정 요소를 지목해서 클로드에 넣는 기능이 있나, 없으면 추가. 지금 있는 것: 핀(무대 우클릭 「여기에 핀」 · 표시 도구)을 요소 위에 꽂으면 PinNote.target(tag · text · path)이 요청문에 on <tag> \"글\" 로 간다. 없는 것: 고르기 도구로 집은 요소를 요청에 바로 넣기. 할 일: 고른 요소의 우클릭(또는 단축키)에 「요청에 넣기」 → 요청칸에 그 요소를 가리키는 표시(예: @쪽 멘션과 같은 꼴의 요소 칩)를 넣고, 보낼 때 turnPrompt 에 slides/<id>.html 의 경로 · 태그 · 글을 싣는다. 여러 요소 · 다른 쪽 요소도. 협업 브라우저에서도 같은 길. 화면 글 한영 · 긴 대시 없음 · ~습니다. 기능 추가라 collab 에만(원본 PR 은 사용자 확인 뒤)",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "[요청 11-26] 처음 화면에서 덱 지우기",
+        "description": "처음 화면의 최근 덱 카드에서 덱을 지울 수 있게 한다",
+        "details": "사용자: 초기 화면에서 PPT 를 새로 만들거나 고를 수는 있지만 삭제할 수 없다. 할 일: 덱 카드 우클릭 메뉴(또는 카드의 … 단추)에 「지우기」. 확인 창을 거치고, 파일은 휴지통으로(바로 지우지 않음 — 되살릴 수 있게). 열려 있는 덱이면 먼저 닫는다. 최근 목록(settings.recent)에서도 뺀다. 저장 폴더 밖(최근 목록에만 있는 덱)은 목록에서 빼기만 할지 함께 정한다. Rust 에 휴지통 보내기 명령(trash crate 또는 SHFileOperation/IFileOperation)이 필요할 수 있다 — 새 의존성이면 까닭을 적는다. 기능 추가라 collab 에만(원본 PR 은 사용자 확인 뒤)",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 20,
+        "title": "[요청 11-26] 설정 창도 바깥을 누르면 닫히게",
+        "description": "내보내기 · 릴리즈 팝업처럼 설정 창도 바깥을 누르면 닫히게 한다",
+        "details": "사용자: 릴리즈나 내보내기를 열고 다른 곳을 클릭하면 알아서 닫히는데 설정은 그게 안 된다. 할 일: Settings 바깥(무대 · 제목 줄 · 쪽 목록 등) 마우스 누름에서 닫기. 단 설정 안의 입력 중(이름 · 경로 칸 등)이나 select 드롭다운 · 파일 고르기 창이 열린 동안은 닫히지 않게. 원본에도 같은 동작이 없으면 작은 UX 고장 수정으로 원본 PR(원본 main 에서 브랜치)",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 21,
+        "title": "[요청 11-26] 깨져 보이는 글 고치기",
+        "description": "사용자 스크린샷의 글이 오른쪽에서 잘려 깨져 보이는 곳을 찾아 고친다",
+        "details": "사용자 두 번째 스크린샷: 둥근 칸 안의 글 「로그인 사내 계정 그대로 사용 처음 접속하면 비밀번호 변경 저우…」가 오른쪽 끝에서 잘리고(글자가 반쯤 보임) 그 오른쪽에 주황/빨강 세로 막대가 있다. 어디인지 먼저 찾는다 — 후보: 요청칸 위 핀 묶음(tray)의 핀 글 · 무대의 의견 글 · 의견 목록 · 알림. 사용자 덱 「제목 없음」의 pins.json/talk.json 에 그 글이 있는지로 자리를 가린다(덱 파일은 읽기만, 고치지 않는다). 넘침(overflow) · 말줄임(ellipsis) · 줄바꿈 처리를 고친다. 원본에도 있는 고장이면 원본 PR",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
@@ -376,7 +422,10 @@
       "completedCount": 17,
       "tags": [
         "collab"
-      ]
+      ],
+      "created": "2026-11-26T02:30:51.225Z",
+      "description": "Tasks for collab context",
+      "updated": "2026-11-26T02:31:15.458Z"
     }
   }
 }
