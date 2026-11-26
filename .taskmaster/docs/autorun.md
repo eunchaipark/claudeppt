@@ -63,7 +63,7 @@
 
 ## 자동 작업 중 알게 된 제약 (2026-11-25 18:45)
 
-- fork 에 push 할 때 원본의 `.github/workflows/*` 변경이 든 커밋이 섞이면 거절된다(gh 토큰에 workflow 권한 없음 — `gh auth refresh -s workflow` 는 사용자가 브라우저로 해야 함). 원본 9203878 이 그 커밋이다.
+- (풀림 2026-11-26 09:55 — 토큰에 workflow 권한이 생겨 fork main = 원본 eaf02ce, collab 에 합침. 새 fix/perf 브랜치는 원본 main 에서 딴다) fork 에 push 할 때 원본의 `.github/workflows/*` 변경이 든 커밋이 섞이면 거절된다(gh 토큰에 workflow 권한 없음 — `gh auth refresh -s workflow` 는 사용자가 브라우저로 해야 함). 원본 9203878 이 그 커밋이다.
   → collab 과 fix/perf 브랜치는 **fork 의 main(= 원본 0.7.0, c36069a)** 에서 딴다. 원본 PR 은 그대로 a7garden/claudeppt main 으로 (원본 main 과 문서만 달라 PR 에 지장 없음). 사용자가 권한을 주면 fork main 을 동기화하고 collab 에 upstream/main 을 합친다.
 - 개발 실행에서 모듈을 직접 불러 시험할 때: 브랜치를 바꾸면 Vite 가 import 주소에 `?t=` 를 붙여 `import("/src/lib/x.ts")` 가 앱과 **다른 인스턴스**가 된다. `performance.getEntriesByType("resource")` 에서 `x.ts?t=` 주소를 찾아 불러온다.
 - `TaskStop` 은 tauri dev 의 자식(앱 · cargo · vite)을 끄지 못한다 — `scratchpad/dev-stop.ps1` 로 끈다.

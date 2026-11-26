@@ -88,7 +88,7 @@ cloudflared 는 11-26 아침에 이 PC 에 깔았습니다(`C:\Program Files (x8
 ## 5. 알려진 한계 · 남은 일
 
 - **원본 PR 전에 정할 것**: 이슈 #1 에 관리자 답 대기(담당을 이 방식으로 바꿀지 / 스위치 뒤에 따로 둘지). 계획은 `.taskmaster/docs/upstream-plan.md`.
-- fork 에 원본 최신 두 커밋(라이선스 · README)을 올리지 못했습니다 — gh 토큰에 workflow 권한이 없어서입니다. `gh auth refresh -s workflow` 를 해 주시면 fork main 을 맞추고 collab 에 합칠 수 있습니다.
+- fork main 은 원본 최신(eaf02ce)에 맞췄고 collab 에도 합쳤습니다(11-26 아침, 2935580). `git pull` 로 받으세요.
 - 팀원 세션(세션 목록 · 보낼 곳 · 이름)은 collab 에서는 늘 켜져 있습니다. 원본 규칙(스위치 뒤)에 맞추는 것은 관리자 답 뒤에.
 - 다른 PC 에 없는 글꼴은 브라우저에서 대체 글꼴로 보입니다(덱 `assets/fonts` 에 든 글꼴은 그대로 감). 호스트 글꼴을 내주는 것은 라이선스 · 크기 때문에 보류.
 - 쪽이 많으면 브라우저 쪽 목록이 무겁습니다(쪽마다 iframe, 두 번째부터는 캐시).

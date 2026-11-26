@@ -18,7 +18,7 @@
 **먼저 보실 것**
 1. 보안 1건 — 원본에 비공개 보고함(GHSA, triage). 자세한 내용은 공개 저장소에 적지 않았고 아침 대화 요약에 따로 적음
 2. `test-guide.md` 4-A(이 PC 한 대, 5분) → 4-B(같은 와이파이) → 7(최적화)
-3. `gh auth refresh -s workflow` — fork 가 원본 최신 두 커밋(라이선스 · README, workflow 파일 포함)을 받지 못하고 있음. 권한을 주시면 fork main 을 맞추고 collab 에 합침
+3. ~~`gh auth refresh -s workflow`~~ → 11-26 아침에 끝남: 사용자가 workflow 권한을 승인 → fork main 을 원본 eaf02ce 로 빨리감기(`gh repo sync`) → collab 에 합침 2935580(README 충돌: 담당 절 · 줄을 빼고 원본 새 꼴에 맞춤, 소개의 「담당」 줄은 협업 방식으로). tsc · build · cargo test 24 통과. 원본 PR #4~#16 모두 MERGEABLE
 4. 협업 PR 을 원본에 보낼지 · 스위치 뒤에 둘지(`upstream-plan.md`)
 
 **정리**: 시험 덱 「제목 없음 2」 지움 · 사용자 덱 「제목 없음」 그대로 · 설정(claude opus · xhigh, 내 이름 은채) 그대로 · 개발 실행 · Edge 시험 프로필 끔
