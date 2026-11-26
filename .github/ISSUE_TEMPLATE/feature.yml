@@ -1,0 +1,23 @@
+name: 제안 · Feature request
+description: 새 기능이나 바꾸면 좋을 점
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 어떤 일이 불편한가요 · Problem
+      description: 무엇을 하려다 막혔는지. 해결책보다 상황을 먼저 적어 주세요
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 생각한 방법 · Proposal
+  - type: dropdown
+    id: pr
+    attributes:
+      label: 직접 PR 을 보낼 생각이 있나요 · Will you send a PR?
+      options:
+        - 네 · Yes
+        - 아니요 · No
+        - 도움을 받으면 · With some help
