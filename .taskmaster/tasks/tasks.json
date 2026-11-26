@@ -272,15 +272,15 @@
         "id": "11",
         "title": "[C2] 바깥 길 자동 — 사무실 밖에서도 같은 링크",
         "description": "협업을 켜면 Tailscale Funnel 이나 Cloudflare quick tunnel 을 감지해 띄우고 그 주소를 링크에 넣는다. 둘 다 없으면 LAN 주소(사무실 안에서만)라고 알린다.",
-        "details": "imagegen 의 도구 감지처럼: tailscale(funnel 443) → cloudflared(tunnel --url) 순. 터널은 127.0.0.1 전용 포트에 붙이고, IP 로 믿는 길은 없다. 호스트 앱 제목 줄에 「바깥 열림 · n명」. 먼저 기술 검증: WebSocket 이 각 터널을 지나는지. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[blocked 20:04] collab 988f603 까지 만듦 — 감지(where + 깐 자리) · Tailscale Funnel(--bg --https=443, 끌 때 off) · cloudflared quick tunnel(주소 stderr 읽기, job 에 넣음) · 협업 켤 때 자동 · 링크 첫 주소 · 바깥 Origin 받기 · 설정 칸 · 제목 줄 「바깥 열림」. 시험: cargo test 3개(가짜 cloudflared 로 띄우기·주소·끄기 포함) + Origin · 개발 실행에서 도구 없음 안내 · 오류. **막힌 까닭: 이 PC 에 tailscale · cloudflared 가 없다** — 남의 프로그램을 받아 깔고 인터넷에 여는 일은 사용자 확인이 필요해 하지 않았다. 남은 일(사용자): cloudflared 설치(winget install Cloudflare.cloudflared) 또는 Tailscale 설치 + tailnet 에서 Funnel 허락 → 협업 켜기 → 휴대폰 LTE 로 링크 열기 · 대화 글자 흐름(WebSocket) 확인",
+        "details": "imagegen 의 도구 감지처럼: tailscale(funnel 443) → cloudflared(tunnel --url) 순. 터널은 127.0.0.1 전용 포트에 붙이고, IP 로 믿는 길은 없다. 호스트 앱 제목 줄에 「바깥 열림 · n명」. 먼저 기술 검증: WebSocket 이 각 터널을 지나는지. 설계: .taskmaster/docs/collab-architecture.md · 규칙: .taskmaster/docs/autorun.md\n\n[blocked 20:04] collab 988f603 까지 만듦 — 감지(where + 깐 자리) · Tailscale Funnel(--bg --https=443, 끌 때 off) · cloudflared quick tunnel(주소 stderr 읽기, job 에 넣음) · 협업 켤 때 자동 · 링크 첫 주소 · 바깥 Origin 받기 · 설정 칸 · 제목 줄 「바깥 열림」. 시험: cargo test 3개(가짜 cloudflared 로 띄우기·주소·끄기 포함) + Origin · 개발 실행에서 도구 없음 안내 · 오류. **막힌 까닭: 이 PC 에 tailscale · cloudflared 가 없다** — 남의 프로그램을 받아 깔고 인터넷에 여는 일은 사용자 확인이 필요해 하지 않았다. 남은 일(사용자): cloudflared 설치(winget install Cloudflare.cloudflared) 또는 Tailscale 설치 + tailnet 에서 Funnel 허락 → 협업 켜기 → 휴대폰 LTE 로 링크 열기 · 대화 글자 흐름(WebSocket) 확인\n\n2026-11-26 09:45 완료(사용자가 cloudflared 설치를 맡김). cloudflared 2026.11.2 winget 설치 → 협업 켜기 4.4초에 trycloudflare 주소 저절로 열림 · 초대 링크가 그 주소로. 새 Edge 프로필로 바깥 주소 링크 → 이름 화면 → 들어옴(개발 실행 19초), wss 로 가짜 답 글자 20→100 이 호스트 발신 0.1~0.3초 안에 도착, 브라우저 의견 → 호스트 알림. 협업 끄기 → cloudflared 0 · 주소 502. 켜 둔 채 앱 강제 종료 → cloudflared 0(job). shots/c11-tunnel-*.png",
         "testStrategy": "깔린 도구가 있으면 실제로 열어 바깥 주소로 /app 확인, 없으면 감지 · 안내 문구만 확인",
-        "status": "blocked",
+        "status": "done",
         "dependencies": [
           "10"
         ],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-11-25T11:04:48.520Z"
+        "updatedAt": "2026-11-26T00:46:53.379Z"
       },
       {
         "id": "12",
@@ -371,9 +371,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-25T14:24:58.843Z",
+      "lastModified": "2026-11-26T00:46:53.233Z",
       "taskCount": 17,
-      "completedCount": 16,
+      "completedCount": 17,
       "tags": [
         "collab"
       ]

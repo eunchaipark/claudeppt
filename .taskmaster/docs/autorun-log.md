@@ -3,7 +3,7 @@
 ## 요약 (2026-11-26 00:20 끝냄 · 2026-11-25 18:29 시작)
 
 **끝낸 것**
-- collab 17개 중 16개 완료, 1개 blocked(#11). 모두 fork `collab` 브랜치(원본 0.7.0 위)에 있음 · 마지막 커밋 8e2a3b1
+- collab 17개 모두 완료(#11 은 아침에 사용자가 cloudflared 설치를 맡겨 09:45 완료, 아래 「collab #11 이어서」). 모두 fork `collab` 브랜치(원본 0.7.0 위)에 있음 · 마지막 커밋 8e2a3b1
 - master 남은 작업(최적화 · 취약 의존성) 모두 완료: #8 · #9 · #10 · #12 · #13 · #14 · #16 · #17 · #18
 
 **원본(a7garden/claudeppt)에 보낸 PR — 모두 열림, 관리자 리뷰 대기**
@@ -13,7 +13,7 @@
 - 처음 기여라 PR 의 CI 는 관리자가 승인해야 돈다
 
 **blocked**
-- collab #11 바깥 길: 이 PC 에 tailscale · cloudflared 가 없음. 남의 프로그램을 깔고 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않음. 코드 · 가짜 cloudflared 시험은 끝남 → `test-guide.md` 4-C
+- 없음. (밤에는 collab #11 바깥 길이 blocked 였다: 이 PC 에 tailscale · cloudflared 가 없었고, 남의 프로그램을 깔아 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않았다. 아침에 사용자가 맡겨 깔고 시험함)
 
 **먼저 보실 것**
 1. 보안 1건 — 원본에 비공개 보고함(GHSA, triage). 자세한 내용은 공개 저장소에 적지 않았고 아침 대화 요약에 따로 적음
@@ -169,6 +169,16 @@
 - 시험: `cargo test` tunnel 3개(quick tunnel 줄 읽기 · tailscale 이름 · **가짜 cloudflared(.cmd)로 띄우기 → 주소 읽기 → 끄기 후 프로세스 없음**) · collab Origin(바깥 주소) · 개발 실행: 도구 없음 → 안내 글(`shots/c11-settings.png`), 강제로 열면 「Tailscale 도 cloudflared 도 깔려 있지 않다」
 - **막힌 까닭**: 이 PC 에 tailscale · cloudflared 가 없다. 남의 프로그램을 받아 깔고 서버를 인터넷에 여는 일은 사용자 확인 없이 하지 않았다
 - 사용자가 할 일: `winget install Cloudflare.cloudflared`(계정 필요 없음) 또는 Tailscale 설치 + 관리 화면에서 Funnel 허락 → 앱에서 협업 켜기 → 휴대폰(LTE)으로 링크 열기 → 대화 글자가 흐르는지(WebSocket 이 터널을 지나는지)
+
+### collab #11 이어서 — 2026-11-26 아침, 사용자가 설치를 맡김 (09:33 ~ 09:45)
+
+- `winget install Cloudflare.cloudflared` → 2026.11.2, `C:\Program Files (x86)\cloudflared`(앱이 찾는 자리에 있음). 설치에 UAC 승인 한 번(사용자)
+- 개발 실행 · 새 시험 덱에서 협업 켜기 → **4.4초에** `https://<무작위>.trycloudflare.com` 이 저절로 열리고 초대 링크 첫 주소가 그것으로 · 제목 줄 「바깥 열림 · 2명 접속」
+- 바깥 주소로: curl 초대 페이지 200(폼) · 쿠키 없는 `/` 는 401 · CF-Ray ICN(서울 경유). 새 Edge 프로필로 링크 → 이름 「지수」 → 들어옴(개발 실행은 묶지 않은 모듈이라 화면까지 19초, 설치 판은 한 파일이라 짧을 것)
+- **WebSocket 이 터널을 지남**: `wss://….trycloudflare.com/_/ws`. 호스트가 가짜 답 글자 20자씩 1초 간격 5번 → 브라우저가 20 → 40 → 60 → 80 → 100 을 보낸 뒤 0.1~0.3초 안에 받음, 화면에도 보임. 브라우저가 꽂은 의견 → 호스트에 「지수 님이 1쪽에 의견을 남겼습니다」(`shots/c11-tunnel-browser.png` · `c11-tunnel-host.png`)
+- 닫기: 협업 끄기 → cloudflared 0개, 바깥 주소 502. 다시 켜면 새 주소(4.0초). **켜 둔 채 앱을 강제로 꺼도 cloudflared 0개**(job 으로 함께 꺼짐)
+- 정리: 시험 덱 「제목 없음 2」(09:41 만듦) 지움 · 최근 목록에서 뺌 · Edge 시험 프로필 지움 · 협업 장부(collab.json)의 시험 링크 · 기기(민수 · 지수 · 지호)를 비움 — 공용 링크 열쇠가 시험 중 터널을 지났으므로 새로 만들게(켤 때 저절로 하나 만든다)
+- 확인하지 못한 것: 휴대폰(LTE) 실기기 · Tailscale Funnel(깔지 않음)
 
 ## collab #12 — 브라우저에서 Claude 에게 요청 (20:04 ~ 20:18)
 
