@@ -49,3 +49,28 @@
 - (2)로 정해지면: 세션 목록 · 보낼 곳 · 이름 칸을 `settings.collab` 스위치로 감싼다. 꺼져 있으면 세션 하나(옛 talk.json 꼴)로 돈다
 - 원본 main 이 앞서간 것(9203878 라이선스 · eaf02ce README)에 맞춰 다시 쌓는다 — fork 에 올리려면 gh 토큰에 workflow 권한이 필요하다(`gh auth refresh -s workflow`)
 - README 에 협업 절 · 보안(슬라이드 격리 · 열쇠 · 쿠키) 설명
+
+## 진행 — 협업 PR 보내기 (2026-11-26 오전, 사용자 지시 「협업 PR도 원본에 보내줘」)
+
+- **결정(사용자)**: 원본 PR 도 **담당을 걷는다**(이슈 #1 의 1번). 처음엔 관리자의 옛 답(담당 위에 얹기)대로 담당을 남겼다가 사용자가 「담당 없애달라니깐」 → 담당 걷기를 따로 한 PR 로. 나머지 협업 기능은 「설정 › 협업」 스위치(`settings.collab.on`, 기본 꺼짐) 뒤
+- 원본 관리자가 11-26 오전에 #4~#14 · #16 을 합침(#15 남음). 협업 줄기는 새 원본 main(d02b67e) 위
+- 작업 자리: worktree `<scratchpad>/up`(node_modules 는 junction), Rust 대상 `<scratchpad>/up-target`, 개발 실행은 그 worktree 에서 `CARGO_TARGET_DIR=<up-target>`
+- 시험: `scratchpad/t-up1.js`(가짜 claudeRun — 스위치 꺼짐 · 켬 · 옛 talk.json). 끝나면 시험 덱 「제목 없음 2·3·4」 지우기, 설정(me 은채 · collab.on false) 확인
+
+| 순서 | 원본 PR | 브랜치 | 상태 |
+| - | - | - | - |
+| 0 | #18 담당 걷기 | collab-up/0-remove-seats (21be3bc) | 열림 · MERGEABLE |
+| 1 | #17 팀원 세션(스위치) | collab-up/1-team-sessions (8f3dd38, #18 위) | 열림 · MERGEABLE |
+| 2 | #19 세션 기록 지키기 | collab-up/2-session-restore (b0c9e3e) | 열림 |
+| 3 | #20 같이 보기 + 전송층 | collab-up/3-live-view (a3b9854) | 열림 |
+| 4 | #21 슬라이드 격리 · 캐시 · 압축 | collab-up/4-isolate | 열림 |
+| 5 | #22 초대 링크 | collab-up/5-invite | 열림 |
+| 6 | #23 바깥 길 | collab-up/6-tunnel | 열림 |
+| 7 | #24 브라우저에서 요청 | collab-up/7-remote-send | 열림 |
+| 8 | #25 브라우저 직접 편집 | collab-up/8-remote-edit | 열림 |
+| 9 | #26 세션마다 대기열 | collab-up/9-queue | 열림 |
+| 10 | #27 공유 의견 | collab-up/10-comments | 열림 (원본 판 개발 실행 시험은 사용자 지시로 생략, tsc 만) |
+
+- 11-26 11:00 끝: 협업 PR 11개(#17~#27) 모두 보냄 · 이슈 #1 에 순서 · PR 번호 남김. 시험 덱 「제목 없음 2~8」 지움, 설정 · 협업 장부 정리, worktree 걷음(브랜치는 fork 에). 앱은 collab 2935580 로 띄움
+
+- 보안 수정 56183e1(슬라이드 CSP)은 비공개 보고 건이라 원본 공개 PR 에 넣지 않는다
