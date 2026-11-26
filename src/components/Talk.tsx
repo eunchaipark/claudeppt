@@ -521,7 +521,7 @@ function Composer() {
 						<div className="tray-pin" key={p.id}>
 							<span className="n">{i + 1}</span>
 							<button className="where" onClick={() => setCurrent(slideNo(p.slide) - 1)}>{slideNo(p.slide)}{t("slideN") === "쪽" ? "쪽" : ""}{p.shape ? ` ${GLYPH[p.shape.kind]}` : ""}</button>
-							<input defaultValue={p.text} key={p.text} placeholder={p.target?.text || t("pinPlaceholder")} aria-label={`${t("pin")} ${i + 1}`} onBlur={(e) => { if (e.target.value !== p.text) update(p.id, e.target.value); }}
+							<input data-pin={p.id} title={p.target?.text || undefined} defaultValue={p.text} key={p.text} placeholder={p.target?.text || t("pinPlaceholder")} aria-label={`${t("pin")} ${i + 1}`} onBlur={(e) => { if (e.target.value !== p.text) update(p.id, e.target.value); }}
 								onKeyDown={(e) => { if (e.key === "Enter") { (e.target as HTMLInputElement).blur(); if (e.ctrlKey) go(); } }} />
 							<button className="x" onClick={() => remove(p.id)} aria-label={t("delete")}>×</button>
 						</div>

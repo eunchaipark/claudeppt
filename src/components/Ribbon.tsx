@@ -90,7 +90,7 @@ function useThemeVars() {
 	return vars;
 }
 
-export function Ribbon({ win, info, placing, off }: { win: React.MutableRefObject<Window | null>; info: SelInfo | null; placing: string | null; off: boolean }) {
+export function Ribbon({ win, info, placing, off, onAsk }: { win: React.MutableRefObject<Window | null>; info: SelInfo | null; placing: string | null; off: boolean; onAsk?: () => void }) {
 	const t = useT();
 	const tool = useDeck((s) => s.tool);
 	const setTool = useDeck((s) => s.setTool);
@@ -224,6 +224,13 @@ export function Ribbon({ win, info, placing, off }: { win: React.MutableRefObjec
 			<button disabled={none} onClick={() => send("remove")} title={`${t("rbDelete")} (Delete)`} aria-label={t("rbDelete")}>
 				<Icon d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 9h5.8l.6-9" />
 			</button>
+			{/* 고른 요소를 요청에 넣기 — 그 요소를 가리키는 핀을 꽂고 대화칸으로 (Workspace askAbout) */}
+			{onAsk && (
+				<button className="rb-ask" disabled={none} onClick={onAsk} title={t("askElHint")} aria-label={t("askEl")}>
+					<Icon d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" />
+					<span>{t("askEl")}</span>
+				</button>
+			)}
 			{placing && <span className="rb-hint">{t("rbPlaceHint")}</span>}
 			<button className="rb-close" onClick={() => useRibbon.getState().toggle()} title={`${t("rbHide")} (F)`} aria-label={t("rbHide")}>
 				<Icon d="M4 10l4-4 4 4" />

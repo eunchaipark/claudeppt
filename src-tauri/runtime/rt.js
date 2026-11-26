@@ -689,6 +689,14 @@
 		} else if (m.t === "hit") {
 			const el = document.elementFromPoint(m.x, m.y) || root;
 			post({ t: "hit", req: m.req, path: pathOf(el), tag: el.tagName.toLowerCase(), text: el === root ? "" : label(el), cls: el.className && typeof el.className === "string" ? el.className : "" });
+		} else if (m.t === "selHit") {
+			// 고른 요소 — 「요청에 넣기」가 그 요소 가운데에 핀을 꽂는다 (자리 · 경로 · 글). 글을 고치는 중이면 고치는 요소
+			const el = sel || (edit && edit.el);
+			if (!el || el === root) post({ t: "selHit", req: m.req, none: true });
+			else {
+				const r = el.getBoundingClientRect();
+				post({ t: "selHit", req: m.req, path: pathOf(el), tag: el.tagName.toLowerCase(), text: label(el), x: r.left + r.width / 2, y: r.top + r.height / 2 });
+			}
 		} else if (m.t === "snapshot") {
 			// 비교 검사용 — 슬라이드 전체를 1:1 로 굽는다
 			try {

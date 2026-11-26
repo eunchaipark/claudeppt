@@ -23,7 +23,7 @@ import { EditingNote, SlideFaces, StageFaces } from "./Collab";
 import { CheckBar, CheckMarks, PageGuides } from "./CheckMarks";
 import { remote } from "../lib/transport";
 import { useSettings } from "../lib/settings";
-import Talk, { useTalkFold } from "./Talk";
+import Talk, { openTalk, useTalkFold } from "./Talk";
 
 export function SlideFrame({ file, rev, width, height, w, h, onWin, revHash }: { file: string; rev: number; width: number; height?: number; w: number; h: number; onWin?: (win: Window | null) => void; revHash?: string }) {
 	const id = useDeck((s) => s.id);
@@ -431,6 +431,21 @@ function Stage() {
 		setActive(await placePin(slide.id, win.current, x, y, shape));
 	};
 	const onMark = (s: Shape) => markToPin(s, pinAt);
+	// 요소를 요청에 넣기 — 그 요소를 가리키는 핀(의견은 비움)을 꽂고, 대화칸의 그 핀 칸에 커서를 둔다.
+	// 보내면 핀처럼 쪽 · 태그 · 글 · 경로가 Claude 에게 간다 (prompt.ts pinLine). 2026.11.26 : 「요소를 지목해 Claude 에게 넣는 길」을 찾지 못했다는 요청
+	const askAbout = (x: number, y: number, target: Pin["target"]) => {
+		if (!slide) return;
+		const id = useDeck.getState().addPin({ slide: slide.id, x, y, text: "", target });
+		openTalk(false);
+		requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.tray input[data-pin="${id}"]`)?.focus());
+	};
+	const askSelected = async () => {
+		if (!win.current) return;
+		try {
+			const h: any = await ask(win.current, { t: "selHit" }, 1500);
+			if (!h.none) askAbout(h.x, h.y, { tag: h.tag, text: h.text, path: h.path });
+		} catch {}
+	};
 	// 긋는 도구일 때 Ctrl+Z 는 이 쪽의 마지막 표시 지우기 (도구 고르기 키는 Workspace 에 있다)
 	useEffect(() => {
 		// 스케치 판은 제 Ctrl+Z(마지막 획 지우기)를 쓴다
@@ -463,6 +478,7 @@ function Stage() {
 		}
 		const i = current, n = deck.slides.length;
 		openMenu(e, [
+			...(hit?.path?.length && !flow && !compare ? [{ label: `${t("askEl")} <${hit.tag}>`, run: () => askAbout(hit.x, hit.y, { tag: hit.tag, text: hit.text, path: hit.path }) }] : []),
 			{ label: t("mention"), run: () => st.mentionSlide(i + 1) },
 			...(at && !flow && !compare ? [{ label: t("pinHere"), run: () => pinAt(at.x, at.y) }] : []),
 			...(mode === "edit" && hit?.path?.length && !flow && !compare ? [
@@ -491,7 +507,7 @@ function Stage() {
 
 	return (
 		<section className="stage" data-mode={preview ? "view" : mode} aria-label={t("slides")}>
-			{ribbon ? <Ribbon win={win} info={selInfo} placing={placing} off={!!preview || flow || compare} /> : <div />}
+			{ribbon ? <Ribbon win={win} info={selInfo} placing={placing} off={!!preview || flow || compare} onAsk={askSelected} /> : <div />}
 			<div className="stage-main">
 			{/* 접어 둔 서식 도구를 다시 펴는 손잡이 — 접기 단추가 있던 오른쪽 위 그 자리에 둔다. 2026.11.26 : 도구 띠의 「T」 단추만으로는 다시 펴는 곳을 찾지 못했다 */}
 			{!ribbon && !preview && (
@@ -539,7 +555,7 @@ function Stage() {
 			{!preview && box.w > 0 && (flow
 				// 이어 보기에서는 띠를 무대 위쪽에 띄워 둔다 — 첫 쪽 위 여백(FLOW_PAD)에 들어가고, 스크롤해도 그 자리에 남는다
 				? <StageTools left={(box.w - flowWidth(box.w, deck)) / 2} top={52} right={(box.w + flowWidth(box.w, deck)) / 2} onUndo={undoMark} canUndo={mine.length > 0} />
-				: <StageTools left={left} top={top} right={left + deck.size.w * scale} onUndo={undoMark} canUndo={mine.length > 0} />)}
+				: <StageTools left={left} top={top} right={left + deck.size.w * scale} onUndo={undoMark} canUndo={mine.length > 0} onAsk={selInfo && !preview && !compare ? askSelected : undefined} />)}
 			</div>
 		</section>
 	);
@@ -620,7 +636,7 @@ function MarkLayer({ marks, w, h, scale, drawing, active, onMark }: { marks: Pin
 
 /** 무대 도구 띠 — 슬라이드 위 가장자리에 붙는다. 왼쪽은 도구(고르기 · 펜 · 화살표 · 상자), 오른쪽은 판 비교.
  *  슬라이드에서 손이 멀리 가지 않고, 옆 여백(36px)보다 넓은 위아래 여백을 쓴다 */
-function StageTools({ left, top, right, onUndo, canUndo }: { left: number; top: number; right: number; onUndo: () => void; canUndo: boolean }) {
+function StageTools({ left, top, right, onUndo, canUndo, onAsk }: { left: number; top: number; right: number; onUndo: () => void; canUndo: boolean; onAsk?: () => void }) {
 	const t = useT();
 	const tool = useDeck((s) => s.tool);
 	const setTool = useDeck((s) => s.setTool);
@@ -656,6 +672,16 @@ function StageTools({ left, top, right, onUndo, canUndo }: { left: number; top: 
 						<i />
 						<button onClick={onUndo} disabled={!canUndo} title={`${t("undoMark")} (Ctrl+Z)`} aria-label={t("undoMark")}>
 							<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d="M5 3L2 6l3 3M2.5 6H10a3.5 3.5 0 010 7H6" /></svg>
+						</button>
+					</>
+				)}
+				{/* 요소를 골랐으면 — 그 요소를 요청에 넣기. 서식 도구를 접어 두어도 보이게 여기에도 둔다 */}
+				{tool === "select" && onAsk && (
+					<>
+						<i />
+						<button className="wide" onClick={onAsk} title={t("askElHint")} aria-label={t("askEl")}>
+							<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" /></svg>
+							<span>{t("askEl")}</span>
 						</button>
 					</>
 				)}

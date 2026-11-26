@@ -188,6 +188,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .pin-note .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--faint); font-size: 11px; }
 .pin-note .row .at { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pin-note .row button { color: var(--dim); }
+.ribbon .rb-ask { width: auto; gap: 4px; padding: 0 8px; font-size: 12px; }
 .pin-note .row button:hover { color: var(--text); }
 
 /* 판 비교 렌즈 — 아래가 지금(무대 iframe), 위가 고른 판. 가름선 왼쪽이 고른 판이다.
