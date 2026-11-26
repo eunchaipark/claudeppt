@@ -5,7 +5,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type RemoteInfo, type Tool } from "../lib/api";
 import { type Key, useT } from "../lib/i18n";
 import { rethemeCss, themeVars, writeDeck } from "../lib/deck";
@@ -32,10 +32,22 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 export default function Settings({ onClose }: { onClose: () => void }) {
 	const t = useT();
 	const [tab, setTab] = useState<Tab>("general");
+	// 바깥을 누르면 닫는다 — 내보내기 · 릴리즈 팝업과 같게. 2026.11.26 : 설정만 바깥을 눌러도 남아 있다는 요청.
+	// 제목 줄의 설정 단추(누르면 닫혔다 바로 다시 열린다) · 떠 있는 메뉴 · 팝업(본문 밖에 그려진다)은 바깥으로 치지 않는다
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const k = (e: MouseEvent) => {
+			const el = e.target as Element;
+			if (ref.current?.contains(el) || el.closest?.("[data-settings-toggle], .ctxmenu, .pop")) return;
+			onClose();
+		};
+		addEventListener("mousedown", k);
+		return () => removeEventListener("mousedown", k);
+	}, [onClose]);
 	const tabs: Tab[] = ["general", "templates", "claude", "image", "connect", "collab", "update"];
 	const names: Record<Tab, Key> = { general: "general", templates: "templates", claude: "claude", image: "image", connect: "connect", collab: "collab", update: "update" };
 	return (
-		<div className="settings" role="dialog" aria-label={t("settings")}>
+		<div className="settings" role="dialog" aria-label={t("settings")} ref={ref}>
 			<nav>
 				{tabs.map((x) => <button key={x} className={tab === x ? "on" : ""} onClick={() => setTab(x)}>{t(names[x])}</button>)}
 				<button className="close" onClick={onClose}>{t("close")} <span className="mono" style={{ fontSize: 10 }}>Esc</span></button>
