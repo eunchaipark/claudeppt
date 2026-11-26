@@ -822,7 +822,7 @@ function PinMark({ pin, n, scale, flip, open, onOpen, onClose }: { pin: Pin; n: 
 						<div className="by">{pin.by}</div>
 						<p className="txt">{pin.text || "…"}</p>
 						<div className="row">
-							<span className="at">{pin.target?.text || ""}</span>
+							<span className="at" title={pin.target?.text || undefined}>{pin.target?.text || ""}</span>
 							<button onClick={() => { useDeck.getState().resolvePin(pin.id, true); onClose(); }}>{t("resolve")}</button>
 							<button onClick={() => { useDeck.getState().sendPin(pin.id); onClose(); }} title={t("pinSendHint")}>{t("pinSendShort")}</button>
 						</div>
@@ -846,7 +846,7 @@ function PinMark({ pin, n, scale, flip, open, onOpen, onClose }: { pin: Pin; n: 
 						}} />
 					<div className="row">
 						{/* 가리킨 자리의 글 — 좌표 · 태그 이름은 Claude 에게만 간다 */}
-						<span className="at">{pin.target?.text || ""}</span>
+						<span className="at" title={pin.target?.text || undefined}>{pin.target?.text || ""}</span>
 						<button onClick={() => { remove(pin.id); onClose(); }}>{t("delete")}</button>
 					</div>
 				</div>
