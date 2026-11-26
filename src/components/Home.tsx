@@ -2,7 +2,7 @@
 // 창에 끌어 놓기는 DropZone(App 에 하나)이 받는다.
 // 2026.11.18 : 최근 목록을 오른쪽 글자 줄에서 화면 대부분을 쓰는 카드로 바꿨다 — 가장 잦은 일이 지난 덱을 여는 것이고, 덱은 모양으로 알아본다.
 // 2026.11.26 : 「공유 덱 열기」 — 팀원이 보낸 초대 링크를 브라우저 대신 이 앱의 새 창으로 연다 (collab.rs collab_join). 들어간 곳은 아래 「공유 덱」에 남는다.
-import { open } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, deckUrl, type LibItem } from "../lib/api";
 import { openAny, startNew } from "../lib/flows";
@@ -10,6 +10,7 @@ import { useT } from "../lib/i18n";
 import { useSettings } from "../lib/settings";
 import { useDeck } from "../lib/store";
 import { call } from "../lib/transport";
+import { openMenu } from "./ContextMenu";
 import { originOf, type RunnerState, setMine, useRunners } from "../lib/runner";
 
 /** 공유 덱에 앱으로 들어간다 — 새 창이 뜬다. 들어간 덱 주인을 남겨 다음에는 그것만으로 (기기 쿠키가 앱에 남는다).
@@ -28,6 +29,12 @@ async function joinShared(raw: string) {
 	}
 }
 
+/** 저장 폴더 안의 덱인가 — 밖의 덱(최근 목록에만 있는 덱)은 남의 폴더일 수 있어 지우지 않고 목록에서만 뺀다 */
+const inLibrary = (dir: string, lib: string) => {
+	const n = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+	return !!lib && n(dir).startsWith(n(lib) + "\\");
+};
+
 export default function Home() {
 	const t = useT();
 	const s = useSettings((x) => x.s);
@@ -35,6 +42,32 @@ export default function Home() {
 	const [brief, setBrief] = useState("");
 	const [items, setItems] = useState<LibItem[]>([]);
 	const [working, setWorking] = useState(false);
+	// 덱 카드 우클릭 — 열기 · 폴더 열기 · 지우기(휴지통). 2026.11.26 : 처음 화면에서 덱을 지울 길이 없다는 요청
+	const forget = (dir: string) => useSettings.getState().set((v) => ({ ...v, recent: v.recent.filter((d) => d.toLowerCase() !== dir.toLowerCase()) }));
+	const deckMenu = (e: React.MouseEvent, it: LibItem) => {
+		const title = it.deck?.title || "", folder = it.dir.split(/[\\/]/).pop() || "";
+		// 제목이 같은 덱이 여럿일 수 있다(「제목 없음」) — 폴더 이름이 다르면 함께 보여 어느 덱인지 가린다
+		const name = !title || title === folder ? folder : `${title} (${folder})`;
+		const own = inLibrary(it.dir, s.library);
+		openMenu(e, [
+			{ label: t("open"), run: () => openAny(it.dir) },
+			{ label: t("deckReveal"), run: () => api.reveal(it.dir).catch((x) => useDeck.getState().notify(String(x), "err")) },
+			"-",
+			own
+				? { label: t("deckTrash"), danger: true, run: async () => {
+					if (!(await confirm(t("deckTrashAsk").replace("{name}", name), { title: t("deckTrash"), kind: "warning", okLabel: t("deckTrash"), cancelLabel: t("cancel") }))) return;
+					try {
+						await api.trashDeck(it.dir);
+						forget(it.dir);
+						setItems((xs) => xs.filter((x) => x.dir !== it.dir));
+						useDeck.getState().notify(t("deckTrashed").replace("{name}", name), "ok");
+					} catch (x) {
+						useDeck.getState().notify(String(x), "err");
+					}
+				} }
+				: { label: t("deckForget"), run: () => { forget(it.dir); setItems((xs) => xs.filter((x) => x.dir !== it.dir)); } },
+		]);
+	};
 	// 이번에 만들 덱의 템플릿 — 처음엔 설정의 「새 덱」 템플릿. 여기서 바꿔도 설정은 그대로 둔다
 	const [tpl, setTpl] = useState(s.template);
 	// 공유 덱 열기 — 초대 링크 칸
@@ -148,7 +181,7 @@ export default function Home() {
 				) : (
 					<div className="decks">
 						{items.map((it) => (
-							<button key={it.dir} className="deck-card" onClick={() => openAny(it.dir)} title={it.dir}>
+							<button key={it.dir} className="deck-card" onClick={() => openAny(it.dir)} title={it.dir} onContextMenu={(e) => deckMenu(e, it)}>
 								<DeckThumb item={it} />
 								<span className="t">{it.deck?.title || it.dir.split(/[\\/]/).pop()}</span>
 								<span className="n">{it.deck?.slides?.length ?? 0}{t("slideN") === "쪽" ? "쪽" : " sl"}</span>

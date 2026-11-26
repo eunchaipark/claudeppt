@@ -38,6 +38,8 @@ export const api = {
 	pack: (dir: string, out: string) => invoke<void>("pack_deck", { dir, out }),
 	unpack: (file: string, dest: string) => invoke<string>("unpack_deck", { file, dest }),
 	reveal: (path: string) => invoke<void>("reveal", { path }),
+	/** 덱 폴더를 휴지통으로 (처음 화면의 「지우기») — deck.json 이 있는 폴더만 */
+	trashDeck: (dir: string) => invoke<void>("deck_trash", { dir }),
 
 	vcsInit: (dir: string) => invoke<void>("vcs_init", { dir }),
 	/** author — 이 판을 시킨 팀원 이름. 주면 git 작성자로 남는다 */

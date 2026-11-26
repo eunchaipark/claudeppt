@@ -60,7 +60,7 @@ tauri = { version = "2", features = ["test"] }
 [target.'cfg(windows)'.dependencies]
 # 「내 Claude」 열쇠를 Windows 보호 저장(DPAPI)으로 싼다 (runner.rs).
 # claude 를 앱이 쥔 job 에 넣어, 앱이 어떻게 꺼지든(닫기 · 업데이트 설치 · 강제 종료) 함께 끈다 (claude.rs). tauri 가 이미 쓰는 판이라 새로 받는 것은 없다
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_Security_Cryptography", "Win32_UI_Shell"] }
 
 [profile.release]
 codegen-units = 1

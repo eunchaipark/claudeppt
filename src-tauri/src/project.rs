@@ -159,6 +159,49 @@ pub fn unpack_deck(file: String, dest: String) -> Res<String> {
 }
 
 /// 탐색기에서 폴더를 연다.
+/// 덱 폴더를 휴지통으로 — 처음 화면의 「지우기」. 바로 지우지 않아 휴지통에서 되살릴 수 있다.
+/// deck.json 이 있는 절대 경로의 폴더만 받는다 — 저장 폴더 자체 · 드라이브 · 다른 폴더가 잘못 넘어와도 지우지 않게
+#[tauri::command(async)]
+pub fn deck_trash(dir: String) -> Res<()> {
+	let p = Path::new(&dir);
+	check_trash(p)?;
+	to_trash(p)
+}
+
+fn check_trash(p: &Path) -> Res<()> {
+	if !p.is_absolute() || p.parent().is_none() {
+		return Err("지울 수 없는 자리다".into());
+	}
+	if !p.join("deck.json").is_file() {
+		return Err("덱 폴더가 아니다 (deck.json 이 없다)".into());
+	}
+	Ok(())
+}
+
+/// 윈도 휴지통으로 옮긴다 (SHFileOperationW + FOF_ALLOWUNDO). 묻는 창 · 오류 창은 앱이 띄우므로 끈다
+#[cfg(windows)]
+fn to_trash(p: &Path) -> Res<()> {
+	use std::os::windows::ffi::OsStrExt;
+	use windows_sys::Win32::UI::Shell::{FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, SHFILEOPSTRUCTW, SHFileOperationW};
+	// pFrom 은 이름들을 NUL 로 잇고 NUL 둘로 끝나는 꼴이다
+	let mut from: Vec<u16> = p.as_os_str().encode_wide().collect();
+	from.extend([0, 0]);
+	let mut op: SHFILEOPSTRUCTW = unsafe { std::mem::zeroed() };
+	op.wFunc = FO_DELETE;
+	op.pFrom = from.as_ptr();
+	op.fFlags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as _;
+	let r = unsafe { SHFileOperationW(&mut op) };
+	if r != 0 || op.fAnyOperationsAborted != 0 {
+		return Err(format!("휴지통으로 옮기지 못했다 (코드 {r})"));
+	}
+	Ok(())
+}
+
+#[cfg(not(windows))]
+fn to_trash(_p: &Path) -> Res<()> {
+	Err("휴지통으로 옮기기는 Windows 에서만 된다".into())
+}
+
 #[tauri::command]
 pub fn reveal(path: String) -> Res<()> {
 	let p = Path::new(&path);
@@ -166,4 +209,24 @@ pub fn reveal(path: String) -> Res<()> {
 	if p.is_file() { cmd.arg(format!("/select,{}", p.display())) } else { cmd.arg(p) };
 	cmd.spawn().map_err(err)?;
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// 휴지통으로 보내는 것은 deck.json 이 있는 절대 경로 폴더만 — 저장 폴더 · 드라이브 · 상대 경로는 거절
+	#[test]
+	fn trash_takes_only_deck_folders() {
+		let d = std::env::temp_dir().join(format!("cppt-trash-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&d);
+		std::fs::create_dir_all(&d).unwrap();
+		assert!(check_trash(&d).is_err(), "deck.json 없는 폴더");
+		assert!(check_trash(Path::new("relative/deck")).is_err(), "상대 경로");
+		#[cfg(windows)]
+		assert!(check_trash(Path::new("C:\\")).is_err(), "드라이브");
+		std::fs::write(d.join("deck.json"), "{}").unwrap();
+		assert!(check_trash(&d).is_ok());
+		let _ = std::fs::remove_dir_all(&d);
+	}
 }

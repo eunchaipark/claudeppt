@@ -83,6 +83,7 @@ pub fn run() {
 			project::pack_deck,
 			project::unpack_deck,
 			project::reveal,
+			project::deck_trash,
 			vcs::vcs_init,
 			vcs::vcs_commit,
 			vcs::vcs_commit_paths,
